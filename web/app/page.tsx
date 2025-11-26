@@ -3,6 +3,51 @@
 import { useState } from "react";
 import { usePyodide } from "./hooks/usePyodide";
 
+type Shape = "hexagon";
+
+interface ShapeConfig {
+  getPoints: (size: number, cx: number, cy: number) => string;
+  presets: { label: string; value: number }[];
+}
+
+const shapeConfigs: Record<Shape, ShapeConfig> = {
+  hexagon: {
+    getPoints: (size, cx, cy) => {
+      // Flat-bottom hexagon (matches Python's point_in_hexagon)
+      const points = [];
+      for (let i = 0; i < 6; i++) {
+        const angle = (i * 60) * (Math.PI / 180); // Start from right, flat bottom
+        points.push(`${cx + size * Math.cos(angle)},${cy + size * Math.sin(angle)}`);
+      }
+      return points.join(" ");
+    },
+    presets: [
+      { label: "Flat Bottom", value: 0 },
+      { label: "Pointed Top", value: 30 },
+      { label: "45°", value: 45 },
+      { label: "60°", value: 60 },
+      { label: "90°", value: 90 },
+    ],
+  },
+};
+
+function ShapePreview({ shape, rotation }: { shape: Shape; rotation: number }) {
+  const size = 20;
+  const cx = 20;
+  const cy = 20;
+  const points = shapeConfigs[shape].getPoints(size, cx, cy);
+
+  return (
+    <svg width="40" height="40" viewBox="0 0 40 40">
+      <polygon
+        points={points}
+        fill="#18181b"
+        transform={`rotate(${rotation}, ${cx}, ${cy})`}
+      />
+    </svg>
+  );
+}
+
 export default function Home() {
   const { loading, error, generatePNG, generateSVG } = usePyodide();
   const [url, setUrl] = useState("");
@@ -10,6 +55,7 @@ export default function Home() {
   const [generating, setGenerating] = useState(false);
   const [genError, setGenError] = useState<string | null>(null);
   const [resolution, setResolution] = useState(1000);
+  const [rotation, setRotation] = useState(0);
 
   const handleGenerate = async () => {
     if (!url.trim()) return;
@@ -18,7 +64,7 @@ export default function Home() {
     setGenError(null);
 
     try {
-      const base64 = await generatePNG(url, resolution);
+      const base64 = await generatePNG(url, resolution, rotation);
       setQrImage(`data:image/png;base64,${base64}`);
     } catch (err) {
       setGenError(err instanceof Error ? err.message : "Failed to generate QR");
@@ -31,7 +77,7 @@ export default function Home() {
     if (!url.trim()) return;
 
     try {
-      const base64 = await generatePNG(url, resolution);
+      const base64 = await generatePNG(url, resolution, rotation);
       const link = document.createElement("a");
       link.href = `data:image/png;base64,${base64}`;
       link.download = "qr-hexagon.png";
@@ -45,7 +91,7 @@ export default function Home() {
     if (!url.trim()) return;
 
     try {
-      const svg = await generateSVG(url, resolution);
+      const svg = await generateSVG(url, resolution, rotation);
       const blob = new Blob([svg], { type: "image/svg+xml" });
       const link = document.createElement("a");
       link.href = URL.createObjectURL(blob);
@@ -102,6 +148,54 @@ export default function Home() {
                   placeholder="Enter your URL here..."
                   className="w-full px-4 py-3 rounded-lg border border-zinc-300 bg-white text-zinc-900 focus:ring-2 focus:ring-zinc-500 focus:border-transparent outline-none transition"
                 />
+              </div>
+
+              <div className="flex items-center gap-4">
+                <ShapePreview shape="hexagon" rotation={rotation} />
+                <div className="flex-1 flex flex-col gap-2">
+                  <div className="flex items-center gap-2">
+                    <label
+                      htmlFor="rotation"
+                      className="text-sm font-medium text-zinc-700"
+                    >
+                      Rotation:
+                    </label>
+                    <input
+                      id="rotation-number"
+                      type="number"
+                      min="0"
+                      max="360"
+                      value={rotation}
+                      onChange={(e) => setRotation(Number(e.target.value) % 360)}
+                      className="w-16 px-2 py-1 rounded border border-zinc-300 text-zinc-900 text-sm"
+                    />
+                    <span className="text-sm text-zinc-500">°</span>
+                  </div>
+                  <input
+                    id="rotation"
+                    type="range"
+                    min="0"
+                    max="360"
+                    value={rotation}
+                    onChange={(e) => setRotation(Number(e.target.value))}
+                    className="w-full"
+                  />
+                  <div className="flex flex-wrap gap-2">
+                    {shapeConfigs.hexagon.presets.map((preset) => (
+                      <button
+                        key={preset.value}
+                        onClick={() => setRotation(preset.value)}
+                        className={`px-2 py-1 text-xs rounded border transition ${
+                          rotation === preset.value
+                            ? "bg-zinc-900 text-white border-zinc-900"
+                            : "border-zinc-300 text-zinc-600 hover:bg-zinc-100"
+                        }`}
+                      >
+                        {preset.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
               </div>
 
               <button
