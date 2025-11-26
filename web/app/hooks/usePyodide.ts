@@ -60,8 +60,9 @@ def generate_hexagon_qr(url: str, box_size: int = 20) -> str:
     hex_width = 2 * hex_size
     hex_height = hex_size * math.sqrt(3)
 
-    canvas_width = int(math.ceil(hex_width / box_size) * box_size)
-    canvas_height = int(math.ceil(hex_height / box_size) * box_size)
+    # Add extra padding to canvas to ensure hexagon points aren't cut off
+    canvas_width = int(math.ceil((hex_width + 4 * box_size) / box_size) * box_size)
+    canvas_height = int(math.ceil((hex_height + 4 * box_size) / box_size) * box_size)
 
     cx = canvas_width / 2
     cy = canvas_height / 2
@@ -101,15 +102,17 @@ def generate_hexagon_qr(url: str, box_size: int = 20) -> str:
 
     canvas.paste(qr_img, (qr_x, qr_y))
 
-    min_x = int(cx - hex_size)
-    max_x = int(cx + hex_size)
-    min_y = int(cy - hex_height / 2)
-    max_y = int(cy + hex_height / 2)
+    # Add padding to ensure hexagon points aren't cut off
+    min_x = int(cx - hex_size) - box_size
+    max_x = int(cx + hex_size) + box_size
+    min_y = int(cy - hex_height / 2) - box_size
+    max_y = int(cy + hex_height / 2) + box_size
 
-    min_x = (min_x // box_size) * box_size
-    min_y = (min_y // box_size) * box_size
-    max_x = ((max_x + box_size - 1) // box_size) * box_size
-    max_y = ((max_y + box_size - 1) // box_size) * box_size
+    # Align to grid and clamp to canvas bounds
+    min_x = max(0, (min_x // box_size) * box_size)
+    min_y = max(0, (min_y // box_size) * box_size)
+    max_x = min(canvas_width, ((max_x + box_size - 1) // box_size) * box_size)
+    max_y = min(canvas_height, ((max_y + box_size - 1) // box_size) * box_size)
 
     canvas = canvas.crop((min_x, min_y, max_x, max_y))
     return image_to_base64(canvas)

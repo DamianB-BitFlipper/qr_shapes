@@ -77,9 +77,9 @@ def generate_hexagon_qr(
     hex_width = 2 * hex_size
     hex_height = hex_size * math.sqrt(3)
 
-    # Canvas size - make it align to box_size grid
-    canvas_width = int(math.ceil(hex_width / box_size) * box_size)
-    canvas_height = int(math.ceil(hex_height / box_size) * box_size)
+    # Canvas size - add extra padding to ensure hexagon points aren't cut off
+    canvas_width = int(math.ceil((hex_width + 4 * box_size) / box_size) * box_size)
+    canvas_height = int(math.ceil((hex_height + 4 * box_size) / box_size) * box_size)
 
     # Center of canvas (aligned to grid)
     cx = canvas_width / 2
@@ -134,17 +134,18 @@ def generate_hexagon_qr(
     canvas.paste(qr_img, (qr_x, qr_y))
 
     # Crop to tight hexagon bounds (remove excess white space)
-    # Find actual hexagon bounding box
-    min_x = int(cx - hex_size)
-    max_x = int(cx + hex_size)
-    min_y = int(cy - hex_height / 2)
-    max_y = int(cy + hex_height / 2)
+    # For a flat-bottom hexagon: width = 2*size, height = sqrt(3)*size
+    # Add padding of one module to ensure points aren't cut off
+    min_x = int(cx - hex_size) - box_size
+    max_x = int(cx + hex_size) + box_size
+    min_y = int(cy - hex_height / 2) - box_size
+    max_y = int(cy + hex_height / 2) + box_size
 
-    # Align crop to module grid
-    min_x = (min_x // box_size) * box_size
-    min_y = (min_y // box_size) * box_size
-    max_x = ((max_x + box_size - 1) // box_size) * box_size
-    max_y = ((max_y + box_size - 1) // box_size) * box_size
+    # Align crop to module grid and clamp to canvas bounds
+    min_x = max(0, (min_x // box_size) * box_size)
+    min_y = max(0, (min_y // box_size) * box_size)
+    max_x = min(canvas_width, ((max_x + box_size - 1) // box_size) * box_size)
+    max_y = min(canvas_height, ((max_y + box_size - 1) // box_size) * box_size)
 
     canvas = canvas.crop((min_x, min_y, max_x, max_y))
 
