@@ -60,6 +60,7 @@ def generate_hexagon_qr(
 ) -> None:
     """
     Generate a QR code embedded in a hexagon with random dots filling the gaps.
+    The random dots align perfectly with the QR code grid.
     """
     qr, qr_img = generate_qr_matrix(url, box_size)
 
@@ -67,61 +68,89 @@ def generate_hexagon_qr(
     qr_modules = qr.modules_count
 
     # Calculate hexagon size to fully contain the QR code
-    # For a flat-bottom hexagon, we need the inscribed square to fit the QR
-    # The QR code should fit comfortably inside
     # Hexagon width = 2 * size, height = sqrt(3) * size
-    # We want some padding around the QR code for the random dots
-
     padding_modules = 4  # Extra modules of random dots around QR
     total_modules = qr_modules + 2 * padding_modules
 
     # Size the hexagon so the QR code fits inside with padding
-    # The limiting factor is usually the width
     hex_size = (total_modules * box_size) / 1.5  # Approximate fit
     hex_width = 2 * hex_size
     hex_height = hex_size * math.sqrt(3)
 
-    # Canvas size (add small margin for clean edges)
-    canvas_width = int(hex_width) + 2
-    canvas_height = int(hex_height) + 2
+    # Canvas size - make it align to box_size grid
+    canvas_width = int(math.ceil(hex_width / box_size) * box_size)
+    canvas_height = int(math.ceil(hex_height / box_size) * box_size)
 
-    # Center of canvas
+    # Center of canvas (aligned to grid)
     cx = canvas_width / 2
     cy = canvas_height / 2
 
+    # QR code position - align to grid!
+    # Calculate the top-left position such that QR is centered AND aligned to grid
+    qr_x = int(round((cx - qr_width / 2) / box_size) * box_size)
+    qr_y = int(round((cy - qr_height / 2) / box_size) * box_size)
+
     # Create white canvas
     canvas = Image.new("RGB", (canvas_width, canvas_height), "white")
+    draw = ImageDraw.Draw(canvas)
 
-    # First, fill the entire hexagon area with random dots
-    for py in range(canvas_height):
-        for px in range(canvas_width):
-            if point_in_hexagon(px, py, cx, cy, hex_size):
-                # Determine which "module" this pixel belongs to
-                module_x = px // box_size
-                module_y = py // box_size
+    # Calculate QR code module boundaries (in grid coordinates)
+    qr_start_module_x = qr_x // box_size
+    qr_start_module_y = qr_y // box_size
+    qr_end_module_x = qr_start_module_x + qr_modules
+    qr_end_module_y = qr_start_module_y + qr_modules
 
-                # Use module coordinates to seed consistent random for each cell
-                random.seed(module_x * 10000 + module_y)
-                color = "black" if random.random() > 0.5 else "white"
+    # Fill the hexagon with module-aligned random dots
+    num_modules_x = canvas_width // box_size
+    num_modules_y = canvas_height // box_size
 
-                canvas.putpixel(
-                    (px, py), (0, 0, 0) if color == "black" else (255, 255, 255)
-                )
+    for module_y in range(num_modules_y):
+        for module_x in range(num_modules_x):
+            # Calculate pixel coordinates for this module
+            px = module_x * box_size
+            py = module_y * box_size
 
-    # Now overlay the QR code in the center
-    qr_x = int(cx - qr_width / 2)
-    qr_y = int(cy - qr_height / 2)
+            # Check if center of module is inside hexagon
+            module_cx = px + box_size / 2
+            module_cy = py + box_size / 2
+
+            if not point_in_hexagon(module_cx, module_cy, cx, cy, hex_size):
+                continue
+
+            # Skip if this module is inside the QR code area
+            if (
+                qr_start_module_x <= module_x < qr_end_module_x
+                and qr_start_module_y <= module_y < qr_end_module_y
+            ):
+                continue
+
+            # Draw random black or white module
+            random.seed(module_x * 10000 + module_y)
+            color = "black" if random.random() > 0.5 else "white"
+
+            draw.rectangle([px, py, px + box_size - 1, py + box_size - 1], fill=color)
+
+    # Paste the QR code
     canvas.paste(qr_img, (qr_x, qr_y))
 
-    # Finally, mask out everything outside the hexagon (make it white)
-    for py in range(canvas_height):
-        for px in range(canvas_width):
-            if not point_in_hexagon(px, py, cx, cy, hex_size):
-                canvas.putpixel((px, py), (255, 255, 255))
+    # Crop to tight hexagon bounds (remove excess white space)
+    # Find actual hexagon bounding box
+    min_x = int(cx - hex_size)
+    max_x = int(cx + hex_size)
+    min_y = int(cy - hex_height / 2)
+    max_y = int(cy + hex_height / 2)
+
+    # Align crop to module grid
+    min_x = (min_x // box_size) * box_size
+    min_y = (min_y // box_size) * box_size
+    max_x = ((max_x + box_size - 1) // box_size) * box_size
+    max_y = ((max_y + box_size - 1) // box_size) * box_size
+
+    canvas = canvas.crop((min_x, min_y, max_x, max_y))
 
     canvas.save(output)
     print(f"Hexagon QR code saved to: {output}")
-    print(f"Image dimensions: {canvas_width}x{canvas_height} pixels")
+    print(f"Image dimensions: {canvas.size[0]}x{canvas.size[1]} pixels")
 
 
 def generate_qr(url: str, output: str = "qrcode.png", size: int = 20) -> None:
