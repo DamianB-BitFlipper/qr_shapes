@@ -2,22 +2,28 @@
 
 import math
 import random
+from typing import Dict, Tuple
 
 import qrcode
 from qrcode.constants import ERROR_CORRECT_H
 
 # Note: In Pyodide, all files are executed in the same global namespace.
-# Hexagon and Triangle are available from previously loaded files.
+# BaseShape, Hexagon, and Triangle are available from previously loaded files.
 
+
+# Type alias for viewbox dictionary
+ViewBox = Dict[str, float]
 
 # Available shapes
-SHAPES = {
-    "hexagon": Hexagon(),
-    "triangle": Triangle(),
+SHAPES: Dict[str, "BaseShape"] = {  # type: ignore[name-defined]
+    "hexagon": Hexagon(),  # type: ignore[name-defined]
+    "triangle": Triangle(),  # type: ignore[name-defined]
 }
 
 
-def _generate_svg_data(url: str, shape, rotation: int = 0) -> tuple:
+def _generate_svg_data(
+    url: str, shape: "BaseShape", rotation: int = 0  # type: ignore[name-defined]
+) -> Tuple[str, ViewBox]:
     """Generate QR code SVG data inside a shape.
 
     The QR code is maximally sized to fit within the shape boundary,
@@ -25,7 +31,7 @@ def _generate_svg_data(url: str, shape, rotation: int = 0) -> tuple:
 
     Args:
         url: URL to encode in the QR code
-        shape: Shape implementing QRAble protocol
+        shape: Shape implementing BaseShape
         rotation: Rotation angle in degrees
 
     Returns:
@@ -40,26 +46,15 @@ def _generate_svg_data(url: str, shape, rotation: int = 0) -> tuple:
     qr.add_data(url)
     qr.make(fit=True)
 
+    # The height/width of the QR code grid in modules
     qr_modules = qr.modules_count
 
-    # We want the QR to fill the shape maximally.
-    # First, determine a fixed shape size, then find where the QR fits.
-    # We'll use the QR module count to set the scale.
+    # Get inscribed square info: center position and scale factor
+    # The scale factor converts from unit shape to a shape where QR fits exactly
+    center_x, center_y, scale = shape.max_inscribed_square(qr_modules, rotation)
 
-    # Get the inscribed square info for a unit-sized shape
-    # Then scale everything so the QR (with padding) fits exactly
-    padding_modules = 1  # Minimal padding for maximum size
-    qr_with_padding = qr_modules + 2 * padding_modules
-
-    # Get inscribed square for unit size, then scale
-    _, _, unit_square = shape.max_inscribed_square(1.0, rotation)
-
-    # Scale factor: we want the inscribed square to equal qr_with_padding
-    scale = qr_with_padding / unit_square
-    shape_size = scale  # Shape size after scaling
-
-    # Now get the actual offset for the scaled shape
-    offset_x, offset_y, square_side = shape.max_inscribed_square(shape_size, rotation)
+    # Shape size is the scale factor (distance from center to vertex)
+    shape_size = scale
 
     # Canvas size to fit the shape with margin
     canvas_size = int(math.ceil(shape_size * 2)) + 4
@@ -69,8 +64,8 @@ def _generate_svg_data(url: str, shape, rotation: int = 0) -> tuple:
     cy = canvas_size / 2
 
     # QR position: centered within the inscribed square
-    qr_center_x = cx + offset_x
-    qr_center_y = cy + offset_y
+    qr_center_x = cx + center_x
+    qr_center_y = cy + center_y
     qr_x = int(round(qr_center_x - qr_modules / 2))
     qr_y = int(round(qr_center_y - qr_modules / 2))
 
@@ -133,7 +128,7 @@ def _generate_svg_data(url: str, shape, rotation: int = 0) -> tuple:
     return rects_svg, viewbox
 
 
-def _build_svg(rects_svg: str, viewbox: dict, resolution: int) -> str:
+def _build_svg(rects_svg: str, viewbox: ViewBox, resolution: int) -> str:
     """Build complete SVG string from parts."""
     svg_width = resolution
     svg_height = int(resolution * viewbox["height"] / viewbox["width"])

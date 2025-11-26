@@ -69,27 +69,17 @@ class BaseShape:
 
     def _compute_square_quality(
         self, t0: float, t1: float, t2: float, t3: float, rotation_deg: float
-    ) -> Tuple[float, float, Tuple[float, float]]:
+    ) -> float:
         """Compute how close 4 edge points are to forming a square.
 
         Returns:
-            Tuple of (quality_score, side_length, center) where:
-            - quality_score: 0 = perfect square, higher = worse
-            - side_length: average side length (valid if quality is good)
-            - center: center point of the quadrilateral
+            quality_score: 0 = perfect square, higher = worse
         """
         # Get the 4 points on the edge
         p0 = self._get_edge_point(t0, rotation_deg)
         p1 = self._get_edge_point(t1, rotation_deg)
         p2 = self._get_edge_point(t2, rotation_deg)
         p3 = self._get_edge_point(t3, rotation_deg)
-
-        # For an axis-aligned square, we need:
-        # - p0 and p1 to have same x (right edge)
-        # - p2 and p3 to have same x (left edge)
-        # - p0 and p3 to have same y (top edge)
-        # - p1 and p2 to have same y (bottom edge)
-        # - All sides equal length
 
         # Calculate side lengths
         def dist(a: Tuple[float, float], b: Tuple[float, float]) -> float:
@@ -135,7 +125,25 @@ class BaseShape:
         axis_error = v01[0] ** 2 + v23[0] ** 2 + v12[1] ** 2 + v30[1] ** 2
 
         # Combined quality score (lower is better)
-        quality = side_variance + diag_error + diag_equality_error + angle_error * 0.1 + axis_error
+        return side_variance + diag_error + diag_equality_error + angle_error * 0.1 + axis_error
+
+    def _compute_square_coords(
+        self, t0: float, t1: float, t2: float, t3: float, rotation_deg: float
+    ) -> Tuple[Tuple[float, float], float]:
+        """Compute the center and side length of a square from 4 edge parameters.
+
+        Args:
+            t0, t1, t2, t3: Edge parameters (0-1)
+            rotation_deg: Shape rotation in degrees
+
+        Returns:
+            Tuple of (center, side_length) where center is (x, y)
+        """
+        # Get the 4 points on the edge
+        p0 = self._get_edge_point(t0, rotation_deg)
+        p1 = self._get_edge_point(t1, rotation_deg)
+        p2 = self._get_edge_point(t2, rotation_deg)
+        p3 = self._get_edge_point(t3, rotation_deg)
 
         # Center of the quadrilateral
         center = (
@@ -143,14 +151,23 @@ class BaseShape:
             (p0[1] + p1[1] + p2[1] + p3[1]) / 4,
         )
 
-        return quality, avg_side, center
+        # Average side length
+        def dist(a: Tuple[float, float], b: Tuple[float, float]) -> float:
+            return math.sqrt((a[0] - b[0]) ** 2 + (a[1] - b[1]) ** 2)
+
+        s01 = dist(p0, p1)
+        s12 = dist(p1, p2)
+        s23 = dist(p2, p3)
+        s30 = dist(p3, p0)
+        side_length = (s01 + s12 + s23 + s30) / 4
+
+        return center, side_length
 
     def _compute_adaptive_step(
         self,
         step: float,
         delta: float,
         min_delta: float,
-        min_step: float,
         max_step: float,
     ) -> Tuple[float, bool]:
         """Compute adaptive step size based on loss improvement.
@@ -159,7 +176,6 @@ class BaseShape:
             step: Current step size
             delta: Change in loss (prev_quality - quality), positive = improvement
             min_delta: Minimum delta to consider as progress
-            min_step: Minimum allowed step size
             max_step: Maximum allowed step size
 
         Returns:
@@ -178,7 +194,7 @@ class BaseShape:
 
     def _optimize_square_params(
         self, t0: float, t1: float, t2: float, t3: float, rotation_deg: float, max_iterations: int = 100
-    ) -> Tuple[float, float, float, float, float, float]:
+    ) -> Tuple[float, float, float, float]:
         """Optimize 4 edge parameters to form the best square.
 
         Uses gradient descent with adaptive step size:
@@ -191,7 +207,7 @@ class BaseShape:
             max_iterations: Maximum iterations before stopping
 
         Returns:
-            Tuple of (t0, t1, t2, t3, quality, side_length)
+            Tuple of (t0, t1, t2, t3, quality)
         """
         params = [t0, t1, t2, t3]
         best_params = params.copy()
@@ -205,7 +221,7 @@ class BaseShape:
         prev_quality = float("inf")
 
         for iteration in range(max_iterations):
-            quality, side, _ = self._compute_square_quality(
+            quality = self._compute_square_quality(
                 params[0], params[1], params[2], params[3], rotation_deg
             )
 
@@ -217,7 +233,7 @@ class BaseShape:
             # Adaptive step size
             delta = prev_quality - quality
             step, should_revert = self._compute_adaptive_step(
-                step, delta, min_delta, min_step, max_step
+                step, delta, min_delta, max_step
             )
 
             if should_revert:
@@ -240,13 +256,13 @@ class BaseShape:
             for i in range(4):
                 params_plus = params.copy()
                 params_plus[i] = (params_plus[i] + eps) % 1.0
-                q_plus, _, _ = self._compute_square_quality(
+                q_plus = self._compute_square_quality(
                     params_plus[0], params_plus[1], params_plus[2], params_plus[3], rotation_deg
                 )
 
                 params_minus = params.copy()
                 params_minus[i] = (params_minus[i] - eps) % 1.0
-                q_minus, _, _ = self._compute_square_quality(
+                q_minus = self._compute_square_quality(
                     params_minus[0], params_minus[1], params_minus[2], params_minus[3], rotation_deg
                 )
 
@@ -259,32 +275,24 @@ class BaseShape:
             # Ensure ordering is maintained (t0 < t1 < t2 < t3)
             params.sort()
 
-        final_quality, final_side, _ = self._compute_square_quality(
-            best_params[0], best_params[1], best_params[2], best_params[3], rotation_deg
-        )
-        return (best_params[0], best_params[1], best_params[2], best_params[3], final_quality, final_side)
+        return (best_params[0], best_params[1], best_params[2], best_params[3])
 
     def max_inscribed_square(
-        self, size: float, rotation_deg: float = 0
+        self, qr_modules: int, rotation_deg: float = 0
     ) -> Tuple[float, float, float]:
         """Calculate the maximum axis-aligned inscribed square.
 
-        Uses an edge-walking algorithm:
-        1. Start with 4 points evenly distributed on the shape's edge
-        2. Optimize their positions to form a square
-        3. Try multiple starting configurations and keep the best
-
         Returns:
-            Tuple of (offset_x, offset_y, square_side)
+            Tuple of (center_x, center_y, scale_factor)
         """
         # Initial positions: evenly spaced
         t0, t1, t2, t3 = 0.0, 0.25, 0.5, 0.75
 
-        t0, t1, t2, t3, _, side = self._optimize_square_params(
+        t0, t1, t2, t3 = self._optimize_square_params(
             t0, t1, t2, t3, rotation_deg, max_iterations=100
         )
 
-        _, _, center = self._compute_square_quality(t0, t1, t2, t3, rotation_deg)
+        center, unit_side = self._compute_square_coords(t0, t1, t2, t3, rotation_deg)
 
         # Scale by size
-        return (center[0] * size, center[1] * size, side * size)
+        return (center[0], center[1], qr_modules / unit_side)
