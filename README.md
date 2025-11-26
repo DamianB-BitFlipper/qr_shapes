@@ -16,6 +16,8 @@ Open http://localhost:5600 in your browser. The page auto-reloads when you edit 
 
 ### Deployment
 
+**Live site:** https://damianb.dev/qr
+
 The site automatically deploys to GitHub Pages when you push to the `main` branch.
 
 **Setup (one-time):**
