@@ -19,6 +19,17 @@ class Hexagon(BaseShape):  # type: ignore[name-defined]
     - Flat edges at top and bottom
     """
 
+    # Unit hexagon vertices (size=1), starting from right, going counter-clockwise
+    # Flat-bottom orientation: vertices at 0°, 60°, 120°, 180°, 240°, 300°
+    _UNIT_VERTICES = [
+        (1, 0),  # Right
+        (0.5, math.sqrt(3) / 2),  # Top-right
+        (-0.5, math.sqrt(3) / 2),  # Top-left
+        (-1, 0),  # Left
+        (-0.5, -math.sqrt(3) / 2),  # Bottom-left
+        (0.5, -math.sqrt(3) / 2),  # Bottom-right
+    ]
+
     @property
     def name(self) -> str:
         return "Hexagon"
@@ -33,9 +44,40 @@ class Hexagon(BaseShape):  # type: ignore[name-defined]
             ("90°", 90),
         ]
 
-    def _get_search_range(self) -> Tuple[int, int]:
-        """Hexagon can use a smaller search range due to symmetry."""
-        return (-15, 16)
+    def _get_num_edge_points(self) -> int:
+        """Hexagon has 6 vertices."""
+        return 6
+
+    def _get_edge_point(self, t: float, rotation_deg: float) -> Tuple[float, float]:
+        """Get a point on the unit hexagon's edge at parameter t.
+
+        t=0 starts at right vertex (1, 0), goes counter-clockwise.
+        """
+        t = t % 1.0  # Ensure t is in [0, 1)
+        n = 6
+        segment = int(t * n)
+        segment_t = (t * n) - segment  # Position within segment [0, 1)
+
+        if segment >= n:
+            segment = n - 1
+            segment_t = 1.0
+
+        # Get the two vertices for this segment
+        v1 = self._UNIT_VERTICES[segment]
+        v2 = self._UNIT_VERTICES[(segment + 1) % n]
+
+        # Interpolate between vertices
+        px = v1[0] + segment_t * (v2[0] - v1[0])
+        py = v1[1] + segment_t * (v2[1] - v1[1])
+
+        # Apply rotation
+        if rotation_deg != 0:
+            angle_rad = math.radians(rotation_deg)
+            cos_a = math.cos(angle_rad)
+            sin_a = math.sin(angle_rad)
+            px, py = px * cos_a - py * sin_a, px * sin_a + py * cos_a
+
+        return (px, py)
 
     def point_inside(
         self,

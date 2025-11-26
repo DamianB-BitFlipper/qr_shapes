@@ -4,7 +4,8 @@
   "private": true,
   "scripts": {
     "copy-python": "cp -r ../python_files/* public/",
-    "dev": "pnpm copy-python && next dev --port 5600",
+    "watch-python": "chokidar \"../python_files/**/*.py\" -c \"pnpm copy-python\"",
+    "dev": "pnpm copy-python && concurrently \"pnpm watch-python\" \"next dev --port 5600\"",
     "build": "pnpm copy-python && next build",
     "start": "next start",
     "lint": "eslint"
@@ -19,6 +20,8 @@
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "chokidar-cli": "^3.0.0",
+    "concurrently": "^9.1.2",
     "eslint": "^9",
     "eslint-config-next": "16.0.4",
     "tailwindcss": "^4",

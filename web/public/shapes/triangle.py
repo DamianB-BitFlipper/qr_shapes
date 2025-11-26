@@ -18,6 +18,13 @@ class Triangle(BaseShape):  # type: ignore[name-defined]
     - Base is at the bottom
     """
 
+    # Unit triangle vertices (size=1): top, bottom-right, bottom-left
+    _UNIT_VERTICES = [
+        (0, -1),  # Top vertex
+        (math.cos(math.radians(30)), math.sin(math.radians(30))),  # Bottom right
+        (math.cos(math.radians(150)), math.sin(math.radians(150))),  # Bottom left
+    ]
+
     @property
     def name(self) -> str:
         return "Triangle"
@@ -31,9 +38,43 @@ class Triangle(BaseShape):  # type: ignore[name-defined]
             ("Point Left", 270),
         ]
 
-    def _get_search_range(self) -> Tuple[int, int]:
-        """Triangle needs a wider search range."""
-        return (-30, 31)
+    def _get_num_edge_points(self) -> int:
+        """Triangle has 3 vertices."""
+        return 3
+
+    def _get_edge_point(self, t: float, rotation_deg: float) -> Tuple[float, float]:
+        """Get a point on the unit triangle's edge at parameter t.
+
+        t=0 starts at top vertex, goes clockwise:
+        - t=0 to 1/3: top to bottom-right edge
+        - t=1/3 to 2/3: bottom-right to bottom-left edge
+        - t=2/3 to 1: bottom-left to top edge
+        """
+        t = t % 1.0  # Ensure t is in [0, 1)
+        n = 3
+        segment = int(t * n)
+        segment_t = (t * n) - segment  # Position within segment [0, 1)
+
+        if segment >= n:
+            segment = n - 1
+            segment_t = 1.0
+
+        # Get the two vertices for this segment
+        v1 = self._UNIT_VERTICES[segment]
+        v2 = self._UNIT_VERTICES[(segment + 1) % n]
+
+        # Interpolate between vertices
+        px = v1[0] + segment_t * (v2[0] - v1[0])
+        py = v1[1] + segment_t * (v2[1] - v1[1])
+
+        # Apply rotation
+        if rotation_deg != 0:
+            angle_rad = math.radians(rotation_deg)
+            cos_a = math.cos(angle_rad)
+            sin_a = math.sin(angle_rad)
+            px, py = px * cos_a - py * sin_a, px * sin_a + py * cos_a
+
+        return (px, py)
 
     def point_inside(
         self,
@@ -63,7 +104,7 @@ class Triangle(BaseShape):  # type: ignore[name-defined]
             size * math.sin(math.radians(150)),
         )  # Bottom left
 
-        def sign(p1, p2, p3):
+        def sign(p1: Tuple[float, float], p2: Tuple[float, float], p3: Tuple[float, float]) -> float:
             return (p1[0] - p3[0]) * (p2[1] - p3[1]) - (p2[0] - p3[0]) * (p1[1] - p3[1])
 
         p = (px, py)
@@ -81,12 +122,9 @@ class Triangle(BaseShape):  # type: ignore[name-defined]
         # Rotate point in opposite direction
         px, py = self._rotate_point(px, py, rotation_deg)
 
-        # Unit triangle vertices
-        v0 = (0, -1)
-        v1 = (math.cos(math.radians(30)), math.sin(math.radians(30)))
-        v2 = (math.cos(math.radians(150)), math.sin(math.radians(150)))
+        v0, v1, v2 = self._UNIT_VERTICES
 
-        def sign(p1, p2, p3):
+        def sign(p1: Tuple[float, float], p2: Tuple[float, float], p3: Tuple[float, float]) -> float:
             return (p1[0] - p3[0]) * (p2[1] - p3[1]) - (p2[0] - p3[0]) * (p1[1] - p3[1])
 
         p = (px, py)
