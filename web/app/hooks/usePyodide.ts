@@ -81,7 +81,7 @@ export function usePyodide() {
         const basePath = process.env.NODE_ENV === "production" ? "/qr_shapes" : "";
         
         const pythonFiles = [
-          "protocol.py",
+          "shapes/base_shape.py",
           "shapes/hexagon.py",
           "shapes/triangle.py",
           "qr_generator.py",

@@ -3,8 +3,11 @@
 import math
 from typing import List, Tuple
 
+# At runtime in Pyodide, BaseShape is loaded first into global namespace
+# See: web/app/hooks/usePyodide.ts for load order
 
-class Hexagon:
+
+class Hexagon(BaseShape):  # type: ignore[name-defined]
     """A flat-bottom hexagon shape that can contain a QR code.
 
     The hexagon is defined by its "size" which is the distance from
@@ -30,6 +33,10 @@ class Hexagon:
             ("90°", 90),
         ]
 
+    def _get_search_range(self) -> Tuple[int, int]:
+        """Hexagon can use a smaller search range due to symmetry."""
+        return (-15, 16)
+
     def point_inside(
         self,
         x: float,
@@ -45,11 +52,7 @@ class Hexagon:
         py = y - cy
 
         # Rotate point in opposite direction (to simulate hexagon rotation)
-        if rotation_deg != 0:
-            angle_rad = -math.radians(rotation_deg)
-            cos_a = math.cos(angle_rad)
-            sin_a = math.sin(angle_rad)
-            px, py = px * cos_a - py * sin_a, px * sin_a + py * cos_a
+        px, py = self._rotate_point(px, py, rotation_deg)
 
         # Check against unrotated flat-bottom hexagon
         dx = abs(px)
@@ -65,11 +68,7 @@ class Hexagon:
     def _point_inside_unit(self, px: float, py: float, rotation_deg: float) -> bool:
         """Check if point is inside unit hexagon (size=1) at given rotation."""
         # Rotate point in opposite direction
-        if rotation_deg != 0:
-            angle_rad = -math.radians(rotation_deg)
-            cos_a = math.cos(angle_rad)
-            sin_a = math.sin(angle_rad)
-            px, py = px * cos_a - py * sin_a, px * sin_a + py * cos_a
+        px, py = self._rotate_point(px, py, rotation_deg)
 
         dx = abs(px)
         dy = abs(py)
@@ -80,76 +79,3 @@ class Hexagon:
         if dx <= 0.5:
             return True
         return dy <= h * 2 * (1 - dx)
-
-    def _find_max_square_at_offset(
-        self, offset_x: float, offset_y: float, rotation_deg: float
-    ) -> float:
-        """Binary search for max square side at given offset."""
-        lo, hi = 0.0, 2.0
-        for _ in range(40):
-            mid = (lo + hi) / 2
-            s = mid
-            corners = [
-                (offset_x + s / 2, offset_y - s / 2),
-                (offset_x + s / 2, offset_y + s / 2),
-                (offset_x - s / 2, offset_y - s / 2),
-                (offset_x - s / 2, offset_y + s / 2),
-            ]
-            all_inside = all(
-                self._point_inside_unit(x, y, rotation_deg) for x, y in corners
-            )
-            if all_inside:
-                lo = mid
-            else:
-                hi = mid
-        return lo
-
-    def max_inscribed_square(
-        self, size: float, rotation_deg: float = 0
-    ) -> Tuple[float, float, float]:
-        """Calculate the maximum inscribed axis-aligned square.
-
-        For arbitrary rotation, we numerically search for the optimal
-        square position and size.
-
-        Args:
-            size: The hexagon size (center to vertex distance)
-            rotation_deg: Rotation angle in degrees
-
-        Returns:
-            Tuple of (offset_x, offset_y, square_side)
-        """
-        # For hexagon, the optimal square is always centered due to symmetry
-        # But at odd rotations, the max size varies
-        # Search around center
-        best_side = 0.0
-        best_offset_x = 0.0
-        best_offset_y = 0.0
-
-        # Coarse search
-        for ox_int in range(-15, 16):
-            for oy_int in range(-15, 16):
-                offset_x = ox_int * 0.02
-                offset_y = oy_int * 0.02
-                side = self._find_max_square_at_offset(offset_x, offset_y, rotation_deg)
-                if side > best_side:
-                    best_side = side
-                    best_offset_x = offset_x
-                    best_offset_y = offset_y
-
-        # Fine search around best position
-        for ox_int in range(-10, 11):
-            for oy_int in range(-10, 11):
-                offset_x = best_offset_x + ox_int * 0.005
-                offset_y = best_offset_y + oy_int * 0.005
-                side = self._find_max_square_at_offset(offset_x, offset_y, rotation_deg)
-                if side > best_side:
-                    best_side = side
-                    best_offset_x = offset_x
-                    best_offset_y = offset_y
-
-        # Apply 2% safety margin
-        best_side *= 0.98
-
-        # Scale by size
-        return (best_offset_x * size, best_offset_y * size, best_side * size)

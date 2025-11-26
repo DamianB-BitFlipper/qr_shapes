@@ -3,10 +3,11 @@
 import math
 from typing import List, Tuple
 
-from .base_shape import BaseShape
+# At runtime in Pyodide, BaseShape is loaded first into global namespace
+# See: web/app/hooks/usePyodide.ts for load order
 
 
-class Triangle(BaseShape):
+class Triangle(BaseShape):  # type: ignore[name-defined]
     """An equilateral triangle shape that can contain a QR code.
 
     The triangle is defined by its "size" which is the distance from
