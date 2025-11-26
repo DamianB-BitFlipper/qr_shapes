@@ -38,11 +38,20 @@ export function usePyodide() {
         const micropip = py.pyimport("micropip");
         await micropip.install(["qrcode", "pillow"]);
 
-        // Fetch and run the Python code
+        // Fetch and run the Python code in dependency order
         const basePath = process.env.NODE_ENV === "production" ? "/qr_shapes" : "";
-        const response = await fetch(`${basePath}/qr_generator.py`);
-        const pythonCode = await response.text();
-        await py.runPythonAsync(pythonCode);
+        
+        const pythonFiles = [
+          "protocol.py",
+          "shapes/hexagon.py",
+          "qr_generator.py",
+        ];
+        
+        for (const file of pythonFiles) {
+          const response = await fetch(`${basePath}/${file}`);
+          const code = await response.text();
+          await py.runPythonAsync(code);
+        }
 
         setPyodide(py);
         setLoading(false);
