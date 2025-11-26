@@ -67,13 +67,17 @@ def generate_hexagon_qr(
     qr_width, qr_height = qr_img.size
     qr_modules = qr.modules_count
 
-    # Calculate hexagon size to fully contain the QR code
-    # Hexagon width = 2 * size, height = sqrt(3) * size
-    padding_modules = 4  # Extra modules of random dots around QR
-    total_modules = qr_modules + 2 * padding_modules
+    # The QR code (square) must fit inside the hexagon
+    # Add padding around the QR code
+    padding_modules = 3
 
-    # Size the hexagon so the QR code fits inside with padding
-    hex_size = (total_modules * box_size) / 1.5  # Approximate fit
+    # For a flat-bottom hexagon, calculate the size needed to contain
+    # a centered square of side S (the padded QR code).
+    # Math derivation: hex_size >= S * (1 + sqrt(3)) / (2 * sqrt(3))
+    padded_qr_side = (qr_modules + 2 * padding_modules) * box_size
+    hex_size = (
+        padded_qr_side * (1 + math.sqrt(3)) / (2 * math.sqrt(3)) * 1.05
+    )  # 5% margin
     hex_width = 2 * hex_size
     hex_height = hex_size * math.sqrt(3)
 

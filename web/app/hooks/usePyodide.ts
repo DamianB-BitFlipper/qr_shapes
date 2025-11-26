@@ -48,19 +48,46 @@ def image_to_base64(img):
     return base64.b64encode(buffer.read()).decode("utf-8")
 
 
-def generate_hexagon_qr(url: str, box_size: int = 20) -> str:
+def _generate_hexagon_qr_image(url: str, box_size: int = 20):
+    """Internal function that returns the PIL Image."""
     qr, qr_img = generate_qr_matrix(url, box_size)
     qr_width, qr_height = qr_img.size
     qr_modules = qr.modules_count
 
-    padding_modules = 4
-    total_modules = qr_modules + 2 * padding_modules
-
-    hex_size = (total_modules * box_size) / 1.5
+    # The QR code (square) must fit inside the hexagon
+    # Add padding around the QR code
+    padding_modules = 3
+    qr_side = qr_modules * box_size
+    
+    # For a flat-bottom hexagon centered at origin:
+    # - "size" = distance from center to vertex (corner point)
+    # - Width at middle (y=0) = 2 * size
+    # - Height = sqrt(3) * size
+    # 
+    # The QR code is a square that must fit entirely inside.
+    # The constraint is that all 4 corners of the square must be inside the hexagon.
+    # For a centered square of side S, corners are at (±S/2, ±S/2).
+    # We need point_in_hexagon to return True for these corners.
+    # 
+    # The hexagon's half-height h = size * sqrt(3) / 2
+    # At x = S/2, the hexagon edge is at y = h * 2 * (1 - (S/2) / size) = h * (2 - S/size)
+    # We need S/2 <= h * (2 - S/size)
+    # S/2 <= size * sqrt(3)/2 * (2 - S/size)
+    # S <= size * sqrt(3) * (2 - S/size)
+    # S <= 2*sqrt(3)*size - sqrt(3)*S
+    # S + sqrt(3)*S <= 2*sqrt(3)*size
+    # S * (1 + sqrt(3)) <= 2*sqrt(3)*size
+    # size >= S * (1 + sqrt(3)) / (2*sqrt(3))
+    # size >= S * (1 + sqrt(3)) / (2*sqrt(3)) ≈ S * 0.789
+    # 
+    # So hex_size should be about 0.8 * qr_side to just fit.
+    # But we also want padding, so we use the padded size.
+    
+    padded_qr_side = (qr_modules + 2 * padding_modules) * box_size
+    hex_size = padded_qr_side * (1 + math.sqrt(3)) / (2 * math.sqrt(3)) * 1.05  # 5% margin
     hex_width = 2 * hex_size
     hex_height = hex_size * math.sqrt(3)
 
-    # Add extra padding to canvas to ensure hexagon points aren't cut off
     canvas_width = int(math.ceil((hex_width + 4 * box_size) / box_size) * box_size)
     canvas_height = int(math.ceil((hex_height + 4 * box_size) / box_size) * box_size)
 
@@ -102,33 +129,118 @@ def generate_hexagon_qr(url: str, box_size: int = 20) -> str:
 
     canvas.paste(qr_img, (qr_x, qr_y))
 
-    # Add padding to ensure hexagon points aren't cut off
     min_x = int(cx - hex_size) - box_size
     max_x = int(cx + hex_size) + box_size
     min_y = int(cy - hex_height / 2) - box_size
     max_y = int(cy + hex_height / 2) + box_size
 
-    # Align to grid and clamp to canvas bounds
     min_x = max(0, (min_x // box_size) * box_size)
     min_y = max(0, (min_y // box_size) * box_size)
     max_x = min(canvas_width, ((max_x + box_size - 1) // box_size) * box_size)
     max_y = min(canvas_height, ((max_y + box_size - 1) // box_size) * box_size)
 
-    canvas = canvas.crop((min_x, min_y, max_x, max_y))
-    return image_to_base64(canvas)
+    return canvas.crop((min_x, min_y, max_x, max_y))
 
 
-def generate_qr(url: str, box_size: int = 20) -> str:
+def generate_hexagon_qr_png(url: str, resolution: int = 1000) -> str:
+    """Generate hexagon QR as PNG with target resolution, returns base64."""
+    # Calculate box_size to achieve target resolution
+    # Generate at fixed box_size first, then resize
+    box_size = 20
+    img = _generate_hexagon_qr_image(url, box_size)
+    
+    # Resize to target resolution (maintaining aspect ratio based on width)
+    aspect = img.height / img.width
+    new_width = resolution
+    new_height = int(resolution * aspect)
+    img = img.resize((new_width, new_height), Image.LANCZOS)
+    
+    return image_to_base64(img)
+
+
+def generate_hexagon_qr_svg(url: str, resolution: int = 1000) -> str:
+    """Generate hexagon QR as native SVG, returns SVG string."""
+    # Use box_size of 1 to get module coordinates, then scale
     qr = qrcode.QRCode(
         version=None,
         error_correction=ERROR_CORRECT_H,
-        box_size=box_size,
-        border=4,
+        box_size=1,
+        border=0,
     )
     qr.add_data(url)
     qr.make(fit=True)
-    img = qr.make_image(fill_color="black", back_color="white")
-    return image_to_base64(img.convert("RGB"))
+    
+    qr_modules = qr.modules_count
+    padding_modules = 3
+    
+    # Calculate hex_size based on QR size (same logic as PNG)
+    padded_qr_side = qr_modules + 2 * padding_modules
+    hex_size = padded_qr_side * (1 + math.sqrt(3)) / (2 * math.sqrt(3)) * 1.05
+    hex_height = hex_size * math.sqrt(3)
+    
+    canvas_width = int(math.ceil(hex_size * 2)) + 4
+    canvas_height = int(math.ceil(hex_height)) + 4
+    
+    cx = canvas_width / 2
+    cy = canvas_height / 2
+    
+    qr_x = int(round(cx - qr_modules / 2))
+    qr_y = int(round(cy - qr_modules / 2))
+    
+    qr_start_module_x = qr_x
+    qr_start_module_y = qr_y
+    qr_end_module_x = qr_start_module_x + qr_modules
+    qr_end_module_y = qr_start_module_y + qr_modules
+    
+    # Build SVG
+    rects = []
+    
+    # Add random dots outside QR area
+    for module_y in range(canvas_height):
+        for module_x in range(canvas_width):
+            module_cx = module_x + 0.5
+            module_cy = module_y + 0.5
+            
+            if not point_in_hexagon(module_cx, module_cy, cx, cy, hex_size):
+                continue
+            
+            if (qr_start_module_x <= module_x < qr_end_module_x and
+                qr_start_module_y <= module_y < qr_end_module_y):
+                continue
+            
+            random.seed(module_x * 10000 + module_y)
+            if random.random() > 0.5:
+                rects.append(f'<rect x="{module_x}" y="{module_y}" width="1" height="1"/>')
+    
+    # Add QR code modules
+    matrix = qr.modules
+    for row_idx, row in enumerate(matrix):
+        for col_idx, is_black in enumerate(row):
+            if is_black:
+                x = qr_x + col_idx
+                y = qr_y + row_idx
+                rects.append(f'<rect x="{x}" y="{y}" width="1" height="1"/>')
+    
+    # Calculate viewBox to crop to hexagon bounds
+    min_x = cx - hex_size - 1
+    max_x = cx + hex_size + 1
+    min_y = cy - hex_height / 2 - 1
+    max_y = cy + hex_height / 2 + 1
+    vb_width = max_x - min_x
+    vb_height = max_y - min_y
+    
+    svg_width = resolution
+    svg_height = int(resolution * vb_height / vb_width)
+    
+    svg = f'''<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="{svg_width}" height="{svg_height}" viewBox="{min_x} {min_y} {vb_width} {vb_height}">
+  <rect x="{min_x}" y="{min_y}" width="{vb_width}" height="{vb_height}" fill="white"/>
+  <g fill="black">
+    {"".join(rects)}
+  </g>
+</svg>'''
+    
+    return svg
 `;
 
 export function usePyodide() {
@@ -181,22 +293,27 @@ export function usePyodide() {
     init();
   }, []);
 
-  const generateQR = useCallback(
-    async (
-      url: string,
-      hexagon: boolean = true,
-      boxSize: number = 20
-    ): Promise<string> => {
+  const generatePNG = useCallback(
+    async (url: string, resolution: number = 1000): Promise<string> => {
       if (!pyodide) throw new Error("Pyodide not loaded");
-
-      const funcName = hexagon ? "generate_hexagon_qr" : "generate_qr";
       const result = await pyodide.runPythonAsync(
-        `${funcName}("${url}", ${boxSize})`
+        `generate_hexagon_qr_png("${url}", ${resolution})`
       );
       return result as string;
     },
     [pyodide]
   );
 
-  return { pyodide, loading, loadingStatus, error, generateQR };
+  const generateSVG = useCallback(
+    async (url: string, resolution: number = 1000): Promise<string> => {
+      if (!pyodide) throw new Error("Pyodide not loaded");
+      const result = await pyodide.runPythonAsync(
+        `generate_hexagon_qr_svg("${url}", ${resolution})`
+      );
+      return result as string;
+    },
+    [pyodide]
+  );
+
+  return { pyodide, loading, loadingStatus, error, generatePNG, generateSVG };
 }
