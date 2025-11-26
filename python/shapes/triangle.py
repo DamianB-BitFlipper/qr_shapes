@@ -37,11 +37,7 @@ class Triangle:
         size: float,
         rotation_deg: float = 0,
     ) -> bool:
-        """Check if a point is inside the triangle.
-
-        Uses barycentric coordinates to determine if the point is inside.
-        The triangle rotates around its centroid.
-        """
+        """Check if a point is inside the triangle."""
         # Translate point to origin
         px = x - cx
         py = y - cy
@@ -54,8 +50,6 @@ class Triangle:
             px, py = px * cos_a - py * sin_a, px * sin_a + py * cos_a
 
         # Equilateral triangle with point up at 0° rotation
-        # Vertices at angles -90°, 30°, 150° from center
-        # For point-up triangle: top vertex at -90° (pointing up)
         v0 = (0, -size)  # Top vertex
         v1 = (
             size * math.cos(math.radians(30)),
@@ -66,7 +60,6 @@ class Triangle:
             size * math.sin(math.radians(150)),
         )  # Bottom left
 
-        # Barycentric coordinate check
         def sign(p1, p2, p3):
             return (p1[0] - p3[0]) * (p2[1] - p3[1]) - (p2[0] - p3[0]) * (p1[1] - p3[1])
 
@@ -80,18 +73,46 @@ class Triangle:
 
         return not (has_neg and has_pos)
 
-    def calculate_size(self, qr_side: float) -> float:
-        """Calculate triangle size to contain a centered square.
+    def max_inscribed_square(
+        self, size: float, rotation_deg: float = 0
+    ) -> Tuple[float, float, float]:
+        """Calculate the maximum inscribed axis-aligned square.
 
-        For an equilateral triangle to contain a square of side S centered
-        at the centroid, we need the triangle to be large enough that all
-        four corners of the square are inside.
+        For an equilateral triangle with point up, the optimal square
+        has its bottom edge touching the base.
 
-        The inscribed circle of an equilateral triangle has radius = size/2.
-        The square's half-diagonal is S * sqrt(2) / 2.
-        So we need: size/2 >= S * sqrt(2) / 2
-        Therefore: size >= S * sqrt(2)
+        Derivation:
+        - Top vertex at (0, -size), base at y = size/2
+        - Right slant: x = sqrt(3)/3 * (y + size)
+        - Square bottom at y = size/2, top-right corner at (s/2, size/2 - s)
+        - Top-right must touch slant: s/2 = sqrt(3)/3 * (size/2 - s + size)
+        - Solving: s = 3*sqrt(3)*size / (3 + 2*sqrt(3)) ≈ 0.804 * size
+        - Square center offset_y = size/2 - s/2 ≈ 0.098 * size
 
-        We add a 20% margin because the centroid is not equidistant from all edges.
+        Args:
+            size: The triangle size (center to vertex distance)
+            rotation_deg: Rotation angle in degrees
+
+        Returns:
+            Tuple of (offset_x, offset_y, square_side)
         """
-        return qr_side * math.sqrt(2) * 1.2
+        # s = 3*sqrt(3)*size / (3 + 2*sqrt(3)) ≈ 0.804 * size
+        # Apply 1% safety margin to avoid edge cases
+        square_side = 3 * math.sqrt(3) * size / (3 + 2 * math.sqrt(3)) * 0.99
+
+        # Square center is at y = size/2 - s/2 (offset toward base)
+        # Adjust slightly inward from the base
+        base_offset_y = size / 2 - square_side / 2 - 0.01 * size
+
+        # Apply rotation to the offset vector
+        if rotation_deg != 0:
+            angle_rad = math.radians(rotation_deg)
+            cos_a = math.cos(angle_rad)
+            sin_a = math.sin(angle_rad)
+            offset_x = -base_offset_y * sin_a
+            offset_y = base_offset_y * cos_a
+        else:
+            offset_x = 0
+            offset_y = base_offset_y
+
+        return (offset_x, offset_y, square_side)

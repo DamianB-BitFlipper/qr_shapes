@@ -39,12 +39,7 @@ class Hexagon:
         size: float,
         rotation_deg: float = 0,
     ) -> bool:
-        """Check if a point is inside the hexagon.
-
-        The hexagon rotates around its center. We achieve this by
-        rotating the test point in the opposite direction, then
-        checking against an unrotated hexagon.
-        """
+        """Check if a point is inside the hexagon."""
         # Translate point to origin
         px = x - cx
         py = y - cy
@@ -67,14 +62,29 @@ class Hexagon:
             return True
         return dy <= h * 2 * (1 - dx / size)
 
-    def calculate_size(self, qr_side: float) -> float:
-        """Calculate hexagon size to contain a centered square.
+    def max_inscribed_square(
+        self, size: float, rotation_deg: float = 0
+    ) -> Tuple[float, float, float]:
+        """Calculate the maximum inscribed axis-aligned square.
 
-        For a flat-bottom hexagon to contain a square of side S centered
-        within it, the hexagon size must satisfy:
+        For a flat-bottom hexagon, the max inscribed square is centered.
+        The constraint comes from the slanted edges cutting the corners.
 
-        size >= S * (1 + sqrt(3)) / (2 * sqrt(3))
+        Derivation:
+        - Half-height h = sqrt(3)/2 * size
+        - At x = s/2, the slanted edge is at y = h * 2 * (1 - s/(2*size))
+        - Need s/2 <= this y value
+        - Solving: s = 4*h*size / (size + 2*h) = 2*sqrt(3)*size / (1 + sqrt(3))
 
-        We add a 5% margin for safety.
+        Args:
+            size: The hexagon size (center to vertex distance)
+            rotation_deg: Rotation angle in degrees
+
+        Returns:
+            Tuple of (offset_x, offset_y, square_side)
         """
-        return qr_side * (1 + math.sqrt(3)) / (2 * math.sqrt(3)) * 1.05
+        # s = 2*sqrt(3)*size / (1 + sqrt(3)) ≈ 1.268 * size
+        square_side = 2 * math.sqrt(3) * size / (1 + math.sqrt(3))
+
+        # Centered in the hexagon
+        return (0, 0, square_side)

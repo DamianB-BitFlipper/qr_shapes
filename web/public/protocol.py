@@ -8,7 +8,7 @@ class QRAble(Protocol):
 
     Implementations must provide methods to:
     - Check if a point is inside the shape
-    - Calculate the size needed to contain a QR code
+    - Calculate the maximum inscribed square for the QR code
     - Get rotation presets for the shape
     """
 
@@ -36,14 +36,23 @@ class QRAble(Protocol):
         """
         ...
 
-    def calculate_size(self, qr_side: float) -> float:
-        """Calculate the shape size needed to contain a square QR code.
+    def max_inscribed_square(
+        self, size: float, rotation_deg: float = 0
+    ) -> Tuple[float, float, float]:
+        """Calculate the maximum axis-aligned inscribed square.
+
+        Returns the largest square that fits entirely within the shape,
+        along with its position offset from the shape center.
 
         Args:
-            qr_side: Side length of the QR code (including padding)
+            size: Size of the shape (interpretation depends on shape)
+            rotation_deg: Rotation angle in degrees
 
         Returns:
-            The size parameter for this shape
+            Tuple of (offset_x, offset_y, square_side) where:
+            - offset_x: X offset from shape center
+            - offset_y: Y offset from shape center
+            - square_side: Side length of the inscribed square
         """
         ...
 
