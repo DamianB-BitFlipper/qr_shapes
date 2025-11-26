@@ -62,19 +62,55 @@ class Hexagon:
             return True
         return dy <= h * 2 * (1 - dx / size)
 
+    def _point_inside_unit(self, px: float, py: float, rotation_deg: float) -> bool:
+        """Check if point is inside unit hexagon (size=1) at given rotation."""
+        # Rotate point in opposite direction
+        if rotation_deg != 0:
+            angle_rad = -math.radians(rotation_deg)
+            cos_a = math.cos(angle_rad)
+            sin_a = math.sin(angle_rad)
+            px, py = px * cos_a - py * sin_a, px * sin_a + py * cos_a
+
+        dx = abs(px)
+        dy = abs(py)
+        h = math.sqrt(3) / 2
+
+        if dx > 1 or dy > h:
+            return False
+        if dx <= 0.5:
+            return True
+        return dy <= h * 2 * (1 - dx)
+
+    def _find_max_square_at_offset(
+        self, offset_x: float, offset_y: float, rotation_deg: float
+    ) -> float:
+        """Binary search for max square side at given offset."""
+        lo, hi = 0.0, 2.0
+        for _ in range(40):
+            mid = (lo + hi) / 2
+            s = mid
+            corners = [
+                (offset_x + s / 2, offset_y - s / 2),
+                (offset_x + s / 2, offset_y + s / 2),
+                (offset_x - s / 2, offset_y - s / 2),
+                (offset_x - s / 2, offset_y + s / 2),
+            ]
+            all_inside = all(
+                self._point_inside_unit(x, y, rotation_deg) for x, y in corners
+            )
+            if all_inside:
+                lo = mid
+            else:
+                hi = mid
+        return lo
+
     def max_inscribed_square(
         self, size: float, rotation_deg: float = 0
     ) -> Tuple[float, float, float]:
         """Calculate the maximum inscribed axis-aligned square.
 
-        For a flat-bottom hexagon, the max inscribed square is centered.
-        The constraint comes from the slanted edges cutting the corners.
-
-        Derivation:
-        - Half-height h = sqrt(3)/2 * size
-        - At x = s/2, the slanted edge is at y = h * 2 * (1 - s/(2*size))
-        - Need s/2 <= this y value
-        - Solving: s = 4*h*size / (size + 2*h) = 2*sqrt(3)*size / (1 + sqrt(3))
+        For arbitrary rotation, we numerically search for the optimal
+        square position and size.
 
         Args:
             size: The hexagon size (center to vertex distance)
@@ -83,8 +119,37 @@ class Hexagon:
         Returns:
             Tuple of (offset_x, offset_y, square_side)
         """
-        # s = 2*sqrt(3)*size / (1 + sqrt(3)) ≈ 1.268 * size
-        square_side = 2 * math.sqrt(3) * size / (1 + math.sqrt(3))
+        # For hexagon, the optimal square is always centered due to symmetry
+        # But at odd rotations, the max size varies
+        # Search around center
+        best_side = 0.0
+        best_offset_x = 0.0
+        best_offset_y = 0.0
 
-        # Centered in the hexagon
-        return (0, 0, square_side)
+        # Coarse search
+        for ox_int in range(-15, 16):
+            for oy_int in range(-15, 16):
+                offset_x = ox_int * 0.02
+                offset_y = oy_int * 0.02
+                side = self._find_max_square_at_offset(offset_x, offset_y, rotation_deg)
+                if side > best_side:
+                    best_side = side
+                    best_offset_x = offset_x
+                    best_offset_y = offset_y
+
+        # Fine search around best position
+        for ox_int in range(-10, 11):
+            for oy_int in range(-10, 11):
+                offset_x = best_offset_x + ox_int * 0.005
+                offset_y = best_offset_y + oy_int * 0.005
+                side = self._find_max_square_at_offset(offset_x, offset_y, rotation_deg)
+                if side > best_side:
+                    best_side = side
+                    best_offset_x = offset_x
+                    best_offset_y = offset_y
+
+        # Apply 2% safety margin
+        best_side *= 0.98
+
+        # Scale by size
+        return (best_offset_x * size, best_offset_y * size, best_side * size)

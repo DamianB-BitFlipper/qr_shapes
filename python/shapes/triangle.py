@@ -73,21 +73,64 @@ class Triangle:
 
         return not (has_neg and has_pos)
 
+    def _point_inside_unit(self, px: float, py: float, rotation_deg: float) -> bool:
+        """Check if point is inside unit triangle (size=1) at given rotation."""
+        # Rotate point in opposite direction
+        if rotation_deg != 0:
+            angle_rad = -math.radians(rotation_deg)
+            cos_a = math.cos(angle_rad)
+            sin_a = math.sin(angle_rad)
+            px, py = px * cos_a - py * sin_a, px * sin_a + py * cos_a
+
+        # Unit triangle vertices
+        v0 = (0, -1)
+        v1 = (math.cos(math.radians(30)), math.sin(math.radians(30)))
+        v2 = (math.cos(math.radians(150)), math.sin(math.radians(150)))
+
+        def sign(p1, p2, p3):
+            return (p1[0] - p3[0]) * (p2[1] - p3[1]) - (p2[0] - p3[0]) * (p1[1] - p3[1])
+
+        p = (px, py)
+        d1 = sign(p, v0, v1)
+        d2 = sign(p, v1, v2)
+        d3 = sign(p, v2, v0)
+
+        has_neg = (d1 < 0) or (d2 < 0) or (d3 < 0)
+        has_pos = (d1 > 0) or (d2 > 0) or (d3 > 0)
+
+        return not (has_neg and has_pos)
+
+    def _find_max_square_at_offset(
+        self, offset_x: float, offset_y: float, rotation_deg: float
+    ) -> float:
+        """Binary search for max square side at given offset."""
+        lo, hi = 0.0, 2.0
+        for _ in range(40):
+            mid = (lo + hi) / 2
+            s = mid
+            corners = [
+                (offset_x + s / 2, offset_y - s / 2),
+                (offset_x + s / 2, offset_y + s / 2),
+                (offset_x - s / 2, offset_y - s / 2),
+                (offset_x - s / 2, offset_y + s / 2),
+            ]
+            all_inside = all(
+                self._point_inside_unit(x, y, rotation_deg) for x, y in corners
+            )
+            if all_inside:
+                lo = mid
+            else:
+                hi = mid
+        return lo
+
     def max_inscribed_square(
         self, size: float, rotation_deg: float = 0
     ) -> Tuple[float, float, float]:
         """Calculate the maximum inscribed axis-aligned square.
 
-        For an equilateral triangle with point up, the optimal square
-        has its bottom edge touching the base.
-
-        Derivation:
-        - Top vertex at (0, -size), base at y = size/2
-        - Right slant: x = sqrt(3)/3 * (y + size)
-        - Square bottom at y = size/2, top-right corner at (s/2, size/2 - s)
-        - Top-right must touch slant: s/2 = sqrt(3)/3 * (size/2 - s + size)
-        - Solving: s = 3*sqrt(3)*size / (3 + 2*sqrt(3)) ≈ 0.804 * size
-        - Square center offset_y = size/2 - s/2 ≈ 0.098 * size
+        For arbitrary rotation, we numerically search for the optimal
+        square position and size, since the analytical formula only
+        works for specific angles (0°, 90°, 180°, 270°).
 
         Args:
             size: The triangle size (center to vertex distance)
@@ -96,23 +139,36 @@ class Triangle:
         Returns:
             Tuple of (offset_x, offset_y, square_side)
         """
-        # s = 3*sqrt(3)*size / (3 + 2*sqrt(3)) ≈ 0.804 * size
-        # Apply 1% safety margin to avoid edge cases
-        square_side = 3 * math.sqrt(3) * size / (3 + 2 * math.sqrt(3)) * 0.99
+        # Search over offset positions to find the maximum inscribed square
+        # for a unit triangle, then scale by size
+        best_side = 0.0
+        best_offset_x = 0.0
+        best_offset_y = 0.0
 
-        # Square center is at y = size/2 - s/2 (offset toward base)
-        # Adjust slightly inward from the base
-        base_offset_y = size / 2 - square_side / 2 - 0.01 * size
+        # Search grid - the optimal position is usually near center or toward a flat edge
+        for ox_int in range(-30, 31):
+            for oy_int in range(-30, 31):
+                offset_x = ox_int * 0.02
+                offset_y = oy_int * 0.02
+                side = self._find_max_square_at_offset(offset_x, offset_y, rotation_deg)
+                if side > best_side:
+                    best_side = side
+                    best_offset_x = offset_x
+                    best_offset_y = offset_y
 
-        # Apply rotation to the offset vector
-        if rotation_deg != 0:
-            angle_rad = math.radians(rotation_deg)
-            cos_a = math.cos(angle_rad)
-            sin_a = math.sin(angle_rad)
-            offset_x = -base_offset_y * sin_a
-            offset_y = base_offset_y * cos_a
-        else:
-            offset_x = 0
-            offset_y = base_offset_y
+        # Refine the search around the best position
+        for ox_int in range(-10, 11):
+            for oy_int in range(-10, 11):
+                offset_x = best_offset_x + ox_int * 0.005
+                offset_y = best_offset_y + oy_int * 0.005
+                side = self._find_max_square_at_offset(offset_x, offset_y, rotation_deg)
+                if side > best_side:
+                    best_side = side
+                    best_offset_x = offset_x
+                    best_offset_y = offset_y
 
-        return (offset_x, offset_y, square_side)
+        # Apply 2% safety margin
+        best_side *= 0.98
+
+        # Scale by size
+        return (best_offset_x * size, best_offset_y * size, best_side * size)
