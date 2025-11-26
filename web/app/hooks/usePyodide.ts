@@ -5,6 +5,45 @@ import { useState, useEffect, useCallback, useRef } from "react";
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type PyodideInterface = any;
 
+/**
+ * Convert SVG string to PNG base64 using browser canvas.
+ */
+function svgToPngBase64(svg: string): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const blob = new Blob([svg], { type: "image/svg+xml" });
+    const url = URL.createObjectURL(blob);
+
+    img.onload = () => {
+      const canvas = document.createElement("canvas");
+      canvas.width = img.width;
+      canvas.height = img.height;
+
+      const ctx = canvas.getContext("2d");
+      if (!ctx) {
+        URL.revokeObjectURL(url);
+        reject(new Error("Failed to get canvas context"));
+        return;
+      }
+
+      ctx.drawImage(img, 0, 0);
+      URL.revokeObjectURL(url);
+
+      // Get base64 without the data:image/png;base64, prefix
+      const dataUrl = canvas.toDataURL("image/png");
+      const base64 = dataUrl.replace(/^data:image\/png;base64,/, "");
+      resolve(base64);
+    };
+
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error("Failed to load SVG image"));
+    };
+
+    img.src = url;
+  });
+}
+
 export function usePyodide() {
   const [pyodide, setPyodide] = useState<PyodideInterface | null>(null);
   const [loading, setLoading] = useState(true);
@@ -36,7 +75,7 @@ export function usePyodide() {
         // Install dependencies
         await py.loadPackage("micropip");
         const micropip = py.pyimport("micropip");
-        await micropip.install(["qrcode", "pillow"]);
+        await micropip.install(["qrcode"]);
 
         // Fetch and run the Python code in dependency order
         const basePath = process.env.NODE_ENV === "production" ? "/qr_shapes" : "";
@@ -44,6 +83,7 @@ export function usePyodide() {
         const pythonFiles = [
           "protocol.py",
           "shapes/hexagon.py",
+          "shapes/triangle.py",
           "qr_generator.py",
         ];
         
@@ -64,26 +104,34 @@ export function usePyodide() {
     init();
   }, []);
 
-  const generatePNG = useCallback(
-    async (url: string, resolution: number, rotation: number): Promise<string> => {
+  const generateSVG = useCallback(
+    async (
+      url: string,
+      shape: string,
+      resolution: number,
+      rotation: number
+    ): Promise<string> => {
       if (!pyodide) throw new Error("Pyodide not loaded");
       const result = await pyodide.runPythonAsync(
-        `generate_hexagon_qr_png("${url}", ${resolution}, ${rotation})`
+        `generate_qr_svg("${url}", "${shape}", ${resolution}, ${rotation})`
       );
       return result as string;
     },
     [pyodide]
   );
 
-  const generateSVG = useCallback(
-    async (url: string, resolution: number, rotation: number): Promise<string> => {
-      if (!pyodide) throw new Error("Pyodide not loaded");
-      const result = await pyodide.runPythonAsync(
-        `generate_hexagon_qr_svg("${url}", ${resolution}, ${rotation})`
-      );
-      return result as string;
+  const generatePNG = useCallback(
+    async (
+      url: string,
+      shape: string,
+      resolution: number,
+      rotation: number
+    ): Promise<string> => {
+      // Generate SVG first, then convert to PNG using browser canvas
+      const svg = await generateSVG(url, shape, resolution, rotation);
+      return svgToPngBase64(svg);
     },
-    [pyodide]
+    [generateSVG]
   );
 
   return { loading, error, generatePNG, generateSVG };
