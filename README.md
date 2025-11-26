@@ -20,7 +20,7 @@ Open http://localhost:5600 in your browser. The page auto-reloads when you edit 
 
 ```
 qr_code/
-├── python/              # Python QR generation logic (runs in browser via Pyodide)
+├── python_files/              # Python QR generation logic (runs in browser via Pyodide)
 │   └── qr_generator.py
 ├── web/                 # Next.js frontend
 │   ├── app/

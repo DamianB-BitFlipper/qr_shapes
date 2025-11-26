@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "copy-python": "cp -r ../python/* public/",
+    "copy-python": "cp -r ../python_files/* public/",
     "dev": "pnpm copy-python && next dev --port 5600",
     "build": "pnpm copy-python && next build",
     "start": "next start",

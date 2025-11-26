@@ -11,3 +11,6 @@ wheels/
 
 # Generated images
 *.png
+
+# Python files in web/public
+web/public/*.py
