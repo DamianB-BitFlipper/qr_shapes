@@ -47,3 +47,7 @@ uv run python generate_qr.py "https://your-url.com" --hex -o my_qr.png -s 30
 | `--hex` | Generate hexagon shape | `false` |
 | `-o, --output` | Output filename | `qrcode.png` |
 | `-s, --size` | Box size in pixels | `20` |
+
+---
+
+Made using [ellamind](https://elluminate.de)'s resources.
