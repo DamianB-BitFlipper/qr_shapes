@@ -263,8 +263,6 @@ export function buildLinesPath(modules: [number, number][]): string {
         if (!drawnEdges.has(ek)) {
           drawnEdges.add(ek);
           // Horizontal connector - a rectangle between the two circles
-          const connectorWidth = 1 - 2 * (0.5 - radius); // overlap with circles
-          const connectorHeight = radius * 2;
           paths.push(
             `M${x + 0.5} ${y + 0.5 - radius} ` +
             `L${x + 1.5} ${y + 0.5 - radius} ` +
@@ -287,6 +285,27 @@ export function buildLinesPath(modules: [number, number][]): string {
             `L${x + 0.5 - radius} ${y + 1.5} Z`
           );
         }
+      }
+    }
+
+    // Fill in the center gap of 2x2 squares
+    // Only need to check if current cell is the top-left of a 2x2 square
+    const filled2x2 = new Set<string>();
+    for (const [x, y] of component) {
+      const squareKey = `${x},${y}`;
+      if (filled2x2.has(squareKey)) continue;
+      
+      // Check if this cell is top-left of a 2x2 square
+      if (hasModule(x + 1, y) && hasModule(x, y + 1) && hasModule(x + 1, y + 1)) {
+        filled2x2.add(squareKey);
+        // Draw a small square at the center of the 2x2 to fill the gap
+        const gap = 0.5 - radius; // the gap between circle edge and cell edge
+        paths.push(
+          `M${x + 1 - gap} ${y + 1 - gap} ` +
+          `L${x + 1 + gap} ${y + 1 - gap} ` +
+          `L${x + 1 + gap} ${y + 1 + gap} ` +
+          `L${x + 1 - gap} ${y + 1 + gap} Z`
+        );
       }
     }
   }
