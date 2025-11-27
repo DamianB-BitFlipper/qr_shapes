@@ -1,10 +1,7 @@
 """Base class for QR code shape generators."""
 
 import math
-import random
 from typing import List, Tuple
-
-Point = Tuple[float, float]
 
 
 class BaseShape:
@@ -54,25 +51,6 @@ class BaseShape:
         py = (y - cy) / size
         return self._point_inside_unit(px, py, rotation_deg)
 
-    def _square_fits(self, cx: float, cy: float, half_size: float, rotation_deg: float) -> bool:
-        """Check if an axis-aligned square fits inside the unit shape.
-        
-        Args:
-            cx, cy: Center of the square in unit coordinates
-            half_size: Half the side length of the square
-            rotation_deg: Shape rotation in degrees
-        
-        Returns:
-            True if all 4 corners are inside the shape
-        """
-        corners = [
-            (cx - half_size, cy - half_size),
-            (cx + half_size, cy - half_size),
-            (cx + half_size, cy + half_size),
-            (cx - half_size, cy + half_size),
-        ]
-        return all(self._point_inside_unit(x, y, rotation_deg) for x, y in corners)
-
     def _max_square_at_center(self, cx: float, cy: float, rotation_deg: float) -> float:
         """Find the maximum half-size of a square centered at (cx, cy).
         
@@ -90,11 +68,25 @@ class BaseShape:
             return 0.0
         
         # Binary search for max size
-        lo, hi = 0.0, 2.0  # Max possible half-size in unit coords
+        lo, hi = 0.0, 2.0
+        eps = 1e-9
+        prev_mid = 0.0
         
-        for _ in range(40):  # Enough iterations for good precision
+        for _ in range(40):
             mid = (lo + hi) / 2
-            if self._square_fits(cx, cy, mid, rotation_deg):
+            
+            if abs(mid - prev_mid) < eps:
+                break
+            prev_mid = mid
+            
+            # Check if all 4 corners are inside
+            corners = [
+                (cx - mid, cy - mid),
+                (cx + mid, cy - mid),
+                (cx + mid, cy + mid),
+                (cx - mid, cy + mid),
+            ]
+            if all(self._point_inside_unit(x, y, rotation_deg) for x, y in corners):
                 lo = mid
             else:
                 hi = mid
@@ -138,16 +130,6 @@ class BaseShape:
             # Stalled - reduce step
             return step * 0.8, False
 
-    def _get_bounding_box(self, rotation_deg: float) -> Tuple[float, float, float, float]:
-        """Get bounding box of unit shape at given rotation.
-        
-        Returns:
-            Tuple of (min_x, min_y, max_x, max_y)
-        """
-        # Sample points around the shape to find bounds
-        # For unit shapes, max extent is typically around 1.0
-        return (-1.0, -1.0, 1.0, 1.0)
-
     def max_inscribed_square(
         self, qr_modules: int, rotation_deg: float = 0
     ) -> Tuple[float, float, float]:
@@ -160,92 +142,55 @@ class BaseShape:
         Returns:
             Tuple of (center_x, center_y, scale_factor)
         """
-        # Get bounding box for search bounds
-        min_x, min_y, max_x, max_y = self._get_bounding_box(rotation_deg)
+        # Start at centroid (0, 0 for unit shape)
+        cx, cy = 0.0, 0.0
         
-        best_cx, best_cy = 0.0, 0.0
-        best_size = 0.0
-        best_loss = float("inf")
+        # Gradient descent
+        step = 0.02
+        min_step = 1e-6
+        max_step = 0.1
+        min_delta = 1e-10
+        prev_loss = float("inf")
         
-        # Try multiple starting points
-        n_starts = 15
-        for i in range(n_starts):
-            if i == 0:
-                # Start at centroid
-                cx = (min_x + max_x) / 2
-                cy = (min_y + max_y) / 2
-            else:
-                # Random point inside bounding box
-                cx = min_x + random.random() * (max_x - min_x)
-                cy = min_y + random.random() * (max_y - min_y)
-                
-                # Skip if outside shape
-                if not self._point_inside_unit(cx, cy, rotation_deg):
-                    continue
+        best_cx, best_cy = cx, cy
+        
+        for _ in range(100):
+            loss = self._compute_loss(cx, cy, rotation_deg)
             
-            # Gradient descent
-            step = 0.02
-            min_step = 1e-6
-            max_step = 0.1
-            min_delta = 1e-10
-            prev_loss = float("inf")
+            # Adaptive step
+            delta = prev_loss - loss
+            step, should_revert = self._compute_adaptive_step(
+                step, delta, min_delta, max_step
+            )
             
-            best_iter_cx, best_iter_cy = cx, cy
-            best_iter_loss = float("inf")
+            if should_revert:
+                cx, cy = best_cx, best_cy
+            elif delta > min_delta:
+                # Made progress, update best
+                best_cx, best_cy = cx, cy
             
-            for iteration in range(100):
-                loss = self._compute_loss(cx, cy, rotation_deg)
-                
-                # Track best for this starting point
-                if loss < best_iter_loss:
-                    best_iter_loss = loss
-                    best_iter_cx, best_iter_cy = cx, cy
-                
-                # Adaptive step
-                delta = prev_loss - loss
-                step, should_revert = self._compute_adaptive_step(
-                    step, delta, min_delta, max_step
-                )
-                
-                if should_revert:
-                    cx, cy = best_iter_cx, best_iter_cy
-                
-                if step < min_step:
-                    break
-                
-                prev_loss = loss
-                
-                # Numerical gradient
-                eps = 0.001
-                grad_x = (self._compute_loss(cx + eps, cy, rotation_deg) - 
-                          self._compute_loss(cx - eps, cy, rotation_deg)) / (2 * eps)
-                grad_y = (self._compute_loss(cx, cy + eps, rotation_deg) - 
-                          self._compute_loss(cx, cy - eps, rotation_deg)) / (2 * eps)
-                
-                # Update
-                new_cx = cx - step * grad_x
-                new_cy = cy - step * grad_y
-                
-                # Clamp to bounding box
-                new_cx = max(min_x, min(max_x, new_cx))
-                new_cy = max(min_y, min(max_y, new_cy))
-                
-                # Only move if still inside shape
-                if self._point_inside_unit(new_cx, new_cy, rotation_deg):
-                    cx, cy = new_cx, new_cy
+            if step < min_step:
+                break
             
-            # Check final result for this starting point
-            final_size = self._max_square_at_center(best_iter_cx, best_iter_cy, rotation_deg)
-            final_loss = -final_size
+            prev_loss = loss
             
-            if final_loss < best_loss:
-                best_loss = final_loss
-                best_cx, best_cy = best_iter_cx, best_iter_cy
-                best_size = final_size
+            # Numerical gradient
+            eps = 0.001
+            grad_x = (self._compute_loss(cx + eps, cy, rotation_deg) - 
+                      self._compute_loss(cx - eps, cy, rotation_deg)) / (2 * eps)
+            grad_y = (self._compute_loss(cx, cy + eps, rotation_deg) - 
+                      self._compute_loss(cx, cy - eps, rotation_deg)) / (2 * eps)
+            
+            # Update
+            new_cx = cx - step * grad_x
+            new_cy = cy - step * grad_y
+            
+            # Only move if still inside shape
+            if self._point_inside_unit(new_cx, new_cy, rotation_deg):
+                cx, cy = new_cx, new_cy
         
         # best_size is half the side length in unit coordinates
-        # We want scale such that the full side length equals qr_modules
-        side_length = 2 * best_size
-        scale = qr_modules / side_length
+        best_size = self._max_square_at_center(best_cx, best_cy, rotation_deg)
+        scale = qr_modules / (2 * best_size)
         
         return (best_cx, best_cy, scale)
