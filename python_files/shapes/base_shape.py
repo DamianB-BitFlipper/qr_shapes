@@ -36,6 +36,16 @@ class BaseShape:
         sin_a = np.sin(angle_rad)
         return float(px * cos_a - py * sin_a), float(px * sin_a + py * cos_a)
 
+    def bounding_box_factor(self, rotation_deg: float) -> float:
+        """Get the bounding box expansion factor for the shape at given rotation.
+
+        Returns how much larger the axis-aligned bounding box is compared to
+        the unrotated shape. Default is 1.0 (no expansion).
+
+        Subclasses should override this if rotation affects their bounding box.
+        """
+        return 1.0
+
     def _rotate_points(
         self, points: NDArray[np.floating], rotation_deg: float
     ) -> NDArray[np.floating]:

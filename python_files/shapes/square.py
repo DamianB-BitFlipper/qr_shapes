@@ -1,5 +1,6 @@
 """Square shape implementation for QR codes."""
 
+import math
 from typing import List, Tuple
 
 # At runtime in Pyodide, BaseShape is loaded first into global namespace
@@ -23,6 +24,15 @@ class Square(BaseShape):  # type: ignore[name-defined]
             ("Flat", 0),
             ("Diamond", 45),
         ]
+
+    def bounding_box_factor(self, rotation_deg: float) -> float:
+        """Get bounding box expansion factor for rotated square.
+
+        A square rotated by angle θ has bounding box that expands by:
+        |cos(θ)| + |sin(θ)|, which is √2 at 45°.
+        """
+        angle_rad = math.radians(rotation_deg)
+        return abs(math.cos(angle_rad)) + abs(math.sin(angle_rad))
 
     def _point_inside_unit(self, px: float, py: float, rotation_deg: float) -> bool:
         """Check if point is inside unit square (side=2, centered at origin)."""

@@ -63,8 +63,11 @@ def _generate_svg_data(
     # Shape size is the scale factor (distance from center to vertex)
     shape_size = scale
 
+    # Account for bounding box expansion due to rotation
+    bbox_factor = shape.bounding_box_factor(rotation)
+
     # Canvas size to fit the shape with margin
-    canvas_size = int(math.ceil(shape_size * 2)) + 4
+    canvas_size = int(math.ceil(shape_size * 2 * bbox_factor)) + 4
 
     # Shape center
     cx = canvas_size / 2
@@ -112,11 +115,12 @@ def _generate_svg_data(
                 y = qr_y + row_idx
                 rects.append(f'<rect x="{x}" y="{y}" width="1" height="1"/>')
 
-    # Calculate viewBox
+    # Calculate viewBox - account for rotation expanding the bounding box
     margin = 2
-    min_x = cx - shape_size - margin
-    min_y = cy - shape_size - margin
-    vb_width = (shape_size + margin) * 2
+    effective_size = shape_size * bbox_factor
+    min_x = cx - effective_size - margin
+    min_y = cy - effective_size - margin
+    vb_width = (effective_size + margin) * 2
     vb_height = vb_width
 
     viewbox = {
