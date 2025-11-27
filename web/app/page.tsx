@@ -183,10 +183,31 @@ export default function Home() {
                 />
               </div>
 
-              {/* Shape & Color Row */}
-              <div className="flex items-center gap-4">
-                {/* Shape Selector - compact horizontal grid */}
-                <div className="flex flex-wrap gap-1">
+              {/* Shape Selection */}
+              <div className="flex flex-col gap-3">
+                <div className="flex items-center justify-between">
+                  <label className="text-sm font-medium text-zinc-700">
+                    Shape
+                  </label>
+                  <div className="flex items-center gap-2">
+                    <label
+                      htmlFor="color"
+                      className="text-sm text-zinc-500"
+                    >
+                      Color
+                    </label>
+                    <input
+                      id="color"
+                      type="color"
+                      value={color}
+                      onChange={(e) => setColor(e.target.value)}
+                      className="w-7 h-7 rounded cursor-pointer border border-zinc-300"
+                    />
+                  </div>
+                </div>
+                
+                {/* Shape Grid */}
+                <div className="grid grid-cols-6 gap-2">
                   {shapeList.map((s) => (
                     <button
                       key={s}
@@ -194,79 +215,67 @@ export default function Home() {
                         setShape(s);
                         setRotation(0);
                       }}
-                      className={`p-1.5 rounded-md border-2 transition ${
+                      className={`aspect-square p-2 rounded-lg border-2 transition flex items-center justify-center ${
                         shape === s
-                          ? "border-zinc-900 bg-zinc-100"
-                          : "border-zinc-200 hover:border-zinc-400"
+                          ? "border-zinc-900 bg-zinc-50"
+                          : "border-zinc-200 hover:border-zinc-400 hover:bg-zinc-50"
                       }`}
                       title={shapeConfigs[s].label}
                     >
-                      <svg width="24" height="24" viewBox="0 0 40 40">
+                      <svg viewBox="0 0 40 40" className="w-full h-full max-w-[32px] max-h-[32px]">
                         <polygon
-                          points={shapeConfigs[s].getPoints(16, 20, 20)}
-                          fill={shape === s ? "#18181b" : "#71717a"}
+                          points={shapeConfigs[s].getPoints(18, 20, 20)}
+                          fill={shape === s ? color : "#a1a1aa"}
                         />
                       </svg>
                     </button>
                   ))}
                 </div>
-
-                {/* Color Picker */}
-                <div className="flex items-center gap-2">
-                  <label
-                    htmlFor="color"
-                    className="text-sm font-medium text-zinc-700"
-                  >
-                    Color:
-                  </label>
-                  <input
-                    id="color"
-                    type="color"
-                    value={color}
-                    onChange={(e) => setColor(e.target.value)}
-                    className="w-8 h-8 rounded cursor-pointer border border-zinc-300"
-                  />
-                </div>
-
-                {/* Shape Preview */}
-                <ShapePreview shape={shape} rotation={rotation} color={color} />
               </div>
 
               {/* Rotation Controls */}
-              <div className="flex flex-col gap-2">
-                <div className="flex items-center gap-2">
-                  <label
-                    htmlFor="rotation"
-                    className="text-sm font-medium text-zinc-700"
-                  >
-                    Rotation:
+              <div className="flex flex-col gap-3">
+                <div className="flex items-center justify-between">
+                  <label className="text-sm font-medium text-zinc-700">
+                    Rotation
                   </label>
+                  <div className="flex items-center gap-1">
+                    <input
+                      id="rotation-number"
+                      type="number"
+                      min="0"
+                      max="360"
+                      value={rotation}
+                      onChange={(e) => setRotation(Number(e.target.value) % 360)}
+                      className="w-14 px-2 py-1 rounded border border-zinc-300 text-zinc-900 text-sm text-right"
+                    />
+                    <span className="text-sm text-zinc-500">°</span>
+                  </div>
+                </div>
+                
+                {/* Slider with preview */}
+                <div className="flex items-center gap-3">
                   <input
-                    id="rotation-number"
-                    type="number"
+                    id="rotation"
+                    type="range"
                     min="0"
                     max="360"
                     value={rotation}
-                    onChange={(e) => setRotation(Number(e.target.value) % 360)}
-                    className="w-16 px-2 py-1 rounded border border-zinc-300 text-zinc-900 text-sm"
+                    onChange={(e) => setRotation(Number(e.target.value))}
+                    className="flex-1"
                   />
-                  <span className="text-sm text-zinc-500">°</span>
+                  <div className="flex-shrink-0 w-10 h-10 rounded-lg bg-zinc-100 flex items-center justify-center">
+                    <ShapePreview shape={shape} rotation={rotation} color={color} />
+                  </div>
                 </div>
-                <input
-                  id="rotation"
-                  type="range"
-                  min="0"
-                  max="360"
-                  value={rotation}
-                  onChange={(e) => setRotation(Number(e.target.value))}
-                  className="w-full"
-                />
-                <div className="flex flex-wrap gap-2">
+                
+                {/* Preset buttons */}
+                <div className="flex flex-wrap gap-1.5">
                   {shapeConfigs[shape].presets.map((preset) => (
                     <button
                       key={preset.value}
                       onClick={() => setRotation(preset.value)}
-                      className={`px-2 py-1 text-xs rounded border transition ${
+                      className={`px-2.5 py-1 text-xs rounded-md border transition ${
                         rotation === preset.value
                           ? "bg-zinc-900 text-white border-zinc-900"
                           : "border-zinc-300 text-zinc-600 hover:bg-zinc-100"
