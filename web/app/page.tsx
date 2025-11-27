@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { usePyodide } from "./hooks/usePyodide";
 
-type Shape = "hexagon" | "triangle" | "heart";
+type Shape = "circle" | "hexagon" | "triangle" | "heart";
 
 interface ShapeConfig {
   label: string;
@@ -13,6 +13,19 @@ interface ShapeConfig {
 }
 
 const shapeConfigs: Record<Shape, ShapeConfig> = {
+  circle: {
+    label: "Circle",
+    usePath: true,
+    getPoints: (size, cx, cy) => {
+      // Circle as SVG path using two arcs
+      // M (cx-r, cy) - start at left
+      // A rx ry x-axis-rotation large-arc-flag sweep-flag (cx+r, cy) - top arc
+      // A rx ry x-axis-rotation large-arc-flag sweep-flag (cx-r, cy) - bottom arc
+      // Z - close path
+      return `M ${cx - size} ${cy} A ${size} ${size} 0 1 1 ${cx + size} ${cy} A ${size} ${size} 0 1 1 ${cx - size} ${cy} Z`;
+    },
+    presets: [], // No rotation presets for circle
+  },
   hexagon: {
     label: "Hexagon",
     getPoints: (size, cx, cy) => {
@@ -82,7 +95,7 @@ const shapeConfigs: Record<Shape, ShapeConfig> = {
   },
 };
 
-const shapeList: Shape[] = ["hexagon", "triangle", "heart"];
+const shapeList: Shape[] = ["circle", "hexagon", "triangle", "heart"];
 
 function ShapePreview({
   shape,
@@ -279,7 +292,8 @@ export default function Home() {
                 </div>
               </div>
 
-              {/* Rotation Controls */}
+              {/* Rotation Controls - only show if shape has rotation presets */}
+              {shapeConfigs[shape].presets.length > 0 && (
               <div className="flex flex-col gap-3">
                 <div className="flex items-center justify-between">
                   <label className="text-sm font-medium text-zinc-700">
@@ -332,6 +346,7 @@ export default function Home() {
                   ))}
                 </div>
               </div>
+              )}
 
               <button
                 onClick={handleGenerate}

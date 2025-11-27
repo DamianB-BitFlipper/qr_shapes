@@ -82,6 +82,7 @@ export function usePyodide() {
         
         const pythonFiles = [
           "shapes/base_shape.py",
+          "shapes/circle.py",
           "shapes/hexagon.py",
           "shapes/triangle.py",
           "shapes/heart.py",
