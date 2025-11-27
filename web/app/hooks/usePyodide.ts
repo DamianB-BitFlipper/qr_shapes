@@ -104,10 +104,11 @@ export function usePyodide() {
       resolution: number,
       rotation: number,
       fill: string,
-      style: ModuleStyle = "blocks"
+      style: ModuleStyle = "blocks",
+      transparentBg: boolean = false
     ): Promise<string> => {
       const qrData = await generateQRData(url, shape, rotation);
-      return buildSVG(qrData, resolution, fill, style);
+      return buildSVG(qrData, resolution, fill, style, transparentBg);
     },
     [generateQRData]
   );
@@ -122,17 +123,18 @@ export function usePyodide() {
       resolution: number,
       rotation: number,
       fill: string,
-      style: ModuleStyle = "blocks"
+      style: ModuleStyle = "blocks",
+      transparentBg: boolean = false
     ): Promise<string> => {
       const qrData = await generateQRData(url, shape, rotation);
       const isImage = fill.startsWith("data:image");
       
       if (isImage) {
         // Use canvas-based rendering with contrast-aware modules
-        return renderQRWithImage(qrData, fill, resolution, style);
+        return renderQRWithImage(qrData, fill, resolution, style, transparentBg);
       } else {
         // Generate SVG and convert to PNG
-        const svg = buildSVG(qrData, resolution, fill, style);
+        const svg = buildSVG(qrData, resolution, fill, style, transparentBg);
         return svgToPngBase64(svg);
       }
     },

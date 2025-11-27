@@ -14,7 +14,8 @@ export function buildSVG(
   qrData: QRData,
   resolution: number,
   fill: string,
-  style: ModuleStyle = "blocks"
+  style: ModuleStyle = "blocks",
+  transparentBg: boolean = false
 ): string {
   const vb = qrData.viewbox;
   const svgWidth = resolution;
@@ -65,11 +66,16 @@ export function buildSVG(
       patternPath = buildBlocksPatternPaths(qrData);
   }
 
+  // Background rect - only include if not transparent
+  const bgRect = transparentBg
+    ? ""
+    : `<rect x="${vb.min_x}" y="${vb.min_y}" width="${vb.width}" height="${vb.height}" fill="white"/>`;
+
   return `<?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"
      width="${svgWidth}" height="${svgHeight}" viewBox="${vbStr}">
   ${patternDef}
-  <rect x="${vb.min_x}" y="${vb.min_y}" width="${vb.width}" height="${vb.height}" fill="white"/>
+  ${bgRect}
   <path d="${mergedPath}" fill="${fillAttr}"/>
   <path d="${patternPath}" fill="black" fill-rule="evenodd"/>
 </svg>`;

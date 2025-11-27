@@ -432,7 +432,8 @@ export function renderQRWithImage(
   qrData: QRData,
   imageDataUrl: string,
   resolution: number,
-  style: ModuleStyle = "blocks"
+  style: ModuleStyle = "blocks",
+  transparentBg: boolean = false
 ): Promise<string> {
   return new Promise((resolve, reject) => {
     const img = new Image();
@@ -466,9 +467,11 @@ export function renderQRWithImage(
         return;
       }
       
-      // White background
-      ctx.fillStyle = "white";
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      // Background - white or transparent
+      if (!transparentBg) {
+        ctx.fillStyle = "white";
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+      }
       
       // Build merged path based on style
       const allModules = [...qrData.qrModules, ...qrData.noiseModules];

@@ -187,6 +187,7 @@ export default function Home() {
   const [fillMode, setFillMode] = useState<FillMode>("color");
   const [fillImage, setFillImage] = useState<string | null>(null);
   const [moduleStyle, setModuleStyle] = useState<ModuleStyle>("blocks");
+  const [transparentBg, setTransparentBg] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -230,7 +231,7 @@ export default function Home() {
 
     try {
       const fill = fillMode === "image" && fillImage ? fillImage : color;
-      const base64 = await generatePNG(url, shape, resolution, rotation, fill, moduleStyle);
+      const base64 = await generatePNG(url, shape, resolution, rotation, fill, moduleStyle, transparentBg);
       setQrImage(`data:image/png;base64,${base64}`);
     } catch (err) {
       setGenError(err instanceof Error ? err.message : "Failed to generate QR");
@@ -244,7 +245,7 @@ export default function Home() {
 
     try {
       const fill = fillMode === "image" && fillImage ? fillImage : color;
-      const base64 = await generatePNG(url, shape, resolution, rotation, fill, moduleStyle);
+      const base64 = await generatePNG(url, shape, resolution, rotation, fill, moduleStyle, transparentBg);
       const link = document.createElement("a");
       link.href = `data:image/png;base64,${base64}`;
       link.download = `qr-${shape}.png`;
@@ -259,7 +260,7 @@ export default function Home() {
 
     try {
       const fill = fillMode === "image" && fillImage ? fillImage : color;
-      const svg = await generateSVG(url, shape, resolution, rotation, fill, moduleStyle);
+      const svg = await generateSVG(url, shape, resolution, rotation, fill, moduleStyle, transparentBg);
       const blob = new Blob([svg], { type: "image/svg+xml" });
       const link = document.createElement("a");
       link.href = URL.createObjectURL(blob);
@@ -497,6 +498,23 @@ export default function Home() {
                     Image will show through where QR modules are black
                   </p>
                 )}
+              </div>
+
+              {/* Transparent Background */}
+              <div className="flex items-center gap-3">
+                <input
+                  id="transparent-bg"
+                  type="checkbox"
+                  checked={transparentBg}
+                  onChange={(e) => setTransparentBg(e.target.checked)}
+                  className="w-4 h-4 rounded border-zinc-300 text-zinc-900 focus:ring-zinc-500 cursor-pointer"
+                />
+                <label
+                  htmlFor="transparent-bg"
+                  className="text-sm text-zinc-700 cursor-pointer select-none"
+                >
+                  Transparent background
+                </label>
               </div>
 
               {/* Rotation Controls - only show if shape has rotation presets */}
