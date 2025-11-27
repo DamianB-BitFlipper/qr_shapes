@@ -1,9 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { usePyodide } from "./hooks/usePyodide";
 
 type Shape = "square" | "circle" | "diamond" | "hexagon" | "triangle" | "heart";
+type FillMode = "color" | "image";
 
 interface ShapeConfig {
   label: string;
@@ -183,6 +184,42 @@ export default function Home() {
   const [rotation, setRotation] = useState(0);
   const [shape, setShape] = useState<Shape>("square");
   const [color, setColor] = useState("#000000");
+  const [fillMode, setFillMode] = useState<FillMode>("color");
+  const [fillImage, setFillImage] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const img = new Image();
+    const reader = new FileReader();
+
+    reader.onload = (event) => {
+      const dataUrl = event.target?.result as string;
+      img.onload = () => {
+        // Validate square image
+        if (img.width !== img.height) {
+          setGenError(`Image must be square. Got ${img.width}x${img.height}`);
+          return;
+        }
+        setFillImage(dataUrl);
+        setFillMode("image");
+        setGenError(null);
+      };
+      img.src = dataUrl;
+    };
+
+    reader.readAsDataURL(file);
+  };
+
+  const handleRemoveImage = () => {
+    setFillImage(null);
+    setFillMode("color");
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
+  };
 
   const handleGenerate = async () => {
     if (!url.trim()) return;
@@ -191,7 +228,8 @@ export default function Home() {
     setGenError(null);
 
     try {
-      const base64 = await generatePNG(url, shape, resolution, rotation, color);
+      const fill = fillMode === "image" && fillImage ? fillImage : color;
+      const base64 = await generatePNG(url, shape, resolution, rotation, fill);
       setQrImage(`data:image/png;base64,${base64}`);
     } catch (err) {
       setGenError(err instanceof Error ? err.message : "Failed to generate QR");
@@ -204,7 +242,8 @@ export default function Home() {
     if (!url.trim()) return;
 
     try {
-      const base64 = await generatePNG(url, shape, resolution, rotation, color);
+      const fill = fillMode === "image" && fillImage ? fillImage : color;
+      const base64 = await generatePNG(url, shape, resolution, rotation, fill);
       const link = document.createElement("a");
       link.href = `data:image/png;base64,${base64}`;
       link.download = `qr-${shape}.png`;
@@ -218,7 +257,8 @@ export default function Home() {
     if (!url.trim()) return;
 
     try {
-      const svg = await generateSVG(url, shape, resolution, rotation, color);
+      const fill = fillMode === "image" && fillImage ? fillImage : color;
+      const svg = await generateSVG(url, shape, resolution, rotation, fill);
       const blob = new Blob([svg], { type: "image/svg+xml" });
       const link = document.createElement("a");
       link.href = URL.createObjectURL(blob);
@@ -283,21 +323,6 @@ export default function Home() {
                   <label className="text-sm font-medium text-zinc-700">
                     Shape
                   </label>
-                  <div className="flex items-center gap-2">
-                    <label
-                      htmlFor="color"
-                      className="text-sm text-zinc-500"
-                    >
-                      Color
-                    </label>
-                    <input
-                      id="color"
-                      type="color"
-                      value={color}
-                      onChange={(e) => setColor(e.target.value)}
-                      className="w-7 h-7 rounded cursor-pointer border border-zinc-300"
-                    />
-                  </div>
                 </div>
                 
                 {/* Shape Grid */}
@@ -332,6 +357,89 @@ export default function Home() {
                     </button>
                   ))}
                 </div>
+              </div>
+
+              {/* Fill Selection (Color or Image) */}
+              <div className="flex flex-col gap-3">
+                <label className="text-sm font-medium text-zinc-700">
+                  Fill
+                </label>
+                <div className="flex items-center gap-3">
+                  {/* Color option */}
+                  <button
+                    onClick={() => setFillMode("color")}
+                    className={`flex items-center gap-2 px-3 py-2 rounded-lg border-2 transition ${
+                      fillMode === "color"
+                        ? "border-zinc-900 bg-zinc-50"
+                        : "border-zinc-200 hover:border-zinc-400"
+                    }`}
+                  >
+                    <input
+                      id="color"
+                      type="color"
+                      value={color}
+                      onChange={(e) => {
+                        setColor(e.target.value);
+                        setFillMode("color");
+                      }}
+                      className="w-6 h-6 rounded cursor-pointer border border-zinc-300"
+                    />
+                    <span className="text-sm text-zinc-700">Color</span>
+                  </button>
+
+                  {/* Image option */}
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/*"
+                    onChange={handleImageUpload}
+                    className="hidden"
+                    id="fill-image"
+                  />
+                  {fillImage ? (
+                    <div
+                      className={`flex items-center gap-2 px-3 py-2 rounded-lg border-2 transition ${
+                        fillMode === "image"
+                          ? "border-zinc-900 bg-zinc-50"
+                          : "border-zinc-200 hover:border-zinc-400"
+                      }`}
+                    >
+                      <button
+                        onClick={() => setFillMode("image")}
+                        className="flex items-center gap-2"
+                      >
+                        <img
+                          src={fillImage}
+                          alt="Fill pattern"
+                          className="w-6 h-6 rounded object-cover"
+                        />
+                        <span className="text-sm text-zinc-700">Image</span>
+                      </button>
+                      <button
+                        onClick={handleRemoveImage}
+                        className="text-zinc-400 hover:text-zinc-600 text-sm"
+                        title="Remove image"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => fileInputRef.current?.click()}
+                      className="flex items-center gap-2 px-3 py-2 rounded-lg border-2 border-dashed border-zinc-300 hover:border-zinc-400 transition"
+                    >
+                      <div className="w-6 h-6 rounded bg-zinc-100 flex items-center justify-center text-zinc-400 text-xs">
+                        +
+                      </div>
+                      <span className="text-sm text-zinc-500">Upload Image</span>
+                    </button>
+                  )}
+                </div>
+                {fillMode === "image" && (
+                  <p className="text-xs text-zinc-500">
+                    Image will show through where QR modules are black
+                  </p>
+                )}
               </div>
 
               {/* Rotation Controls - only show if shape has rotation presets */}

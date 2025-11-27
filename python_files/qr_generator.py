@@ -135,8 +135,15 @@ def _generate_svg_data(
     return rects_svg, viewbox
 
 
-def _build_svg(rects_svg: str, viewbox: ViewBox, resolution: int, color: str = "#000000") -> str:
-    """Build complete SVG string from parts."""
+def _build_svg(rects_svg: str, viewbox: ViewBox, resolution: int, fill: str = "#000000") -> str:
+    """Build complete SVG string from parts.
+
+    Args:
+        rects_svg: SVG rectangle elements as a string
+        viewbox: ViewBox dictionary with min_x, min_y, width, height
+        resolution: Output resolution in pixels
+        fill: Either a color (e.g. "#000000") or a data URL for an image
+    """
     svg_width = resolution
     svg_height = int(resolution * viewbox["height"] / viewbox["width"])
 
@@ -146,10 +153,30 @@ def _build_svg(rects_svg: str, viewbox: ViewBox, resolution: int, color: str = "
     vb_h = viewbox["height"]
     vb = f"{vb_min_x} {vb_min_y} {vb_w} {vb_h}"
 
+    # Check if fill is an image data URL
+    is_image = fill.startswith("data:image")
+
+    if is_image:
+        # Use image as pattern fill
+        # The pattern covers the entire viewBox and the image is stretched to fit
+        pattern_def = f"""<defs>
+    <pattern id="imgPattern" patternUnits="userSpaceOnUse"
+             x="{vb_min_x}" y="{vb_min_y}" width="{vb_w}" height="{vb_h}">
+      <image href="{fill}" x="0" y="0" width="{vb_w}" height="{vb_h}"
+             preserveAspectRatio="xMidYMid slice"/>
+    </pattern>
+  </defs>"""
+        fill_attr = "url(#imgPattern)"
+    else:
+        pattern_def = ""
+        fill_attr = fill
+
     return f"""<?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" width="{svg_width}" height="{svg_height}" viewBox="{vb}">
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"
+     width="{svg_width}" height="{svg_height}" viewBox="{vb}">
+  {pattern_def}
   <rect x="{vb_min_x}" y="{vb_min_y}" width="{vb_w}" height="{vb_h}" fill="white"/>
-  <g fill="{color}">
+  <g fill="{fill_attr}">
     {rects_svg}
   </g>
 </svg>"""
@@ -163,9 +190,17 @@ def generate_qr_svg(
     shape_name: str = "hexagon",
     resolution: int = 1000,
     rotation: int = 0,
-    color: str = "#000000",
+    fill: str = "#000000",
 ) -> str:
-    """Generate shaped QR as SVG, returns SVG string."""
+    """Generate shaped QR as SVG, returns SVG string.
+
+    Args:
+        url: URL to encode in the QR code
+        shape_name: Name of the shape to use
+        resolution: Output resolution in pixels
+        rotation: Rotation angle in degrees
+        fill: Either a color (e.g. "#000000") or a data URL for an image
+    """
     shape = SHAPES.get(shape_name, SHAPES["hexagon"])
     rects_svg, viewbox = _generate_svg_data(url, shape, rotation)
-    return _build_svg(rects_svg, viewbox, resolution, color)
+    return _build_svg(rects_svg, viewbox, resolution, fill)

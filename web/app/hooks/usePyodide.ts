@@ -114,13 +114,27 @@ export function usePyodide() {
       shape: string,
       resolution: number,
       rotation: number,
-      color: string
+      fill: string // Can be a color like "#000000" or a data URL for an image
     ): Promise<string> => {
       if (!pyodide) throw new Error("Pyodide not loaded");
-      const result = await pyodide.runPythonAsync(
-        `generate_qr_svg("${url}", "${shape}", ${resolution}, ${rotation}, "${color}")`
-      );
-      return result as string;
+      
+      // Check if fill is an image data URL
+      const isImage = fill.startsWith("data:image");
+      
+      if (isImage) {
+        // Pass the image data URL to Python for pattern-based fill
+        // We need to escape the string properly for Python
+        const escapedFill = fill.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+        const result = await pyodide.runPythonAsync(
+          `generate_qr_svg("${url}", "${shape}", ${resolution}, ${rotation}, "${escapedFill}")`
+        );
+        return result as string;
+      } else {
+        const result = await pyodide.runPythonAsync(
+          `generate_qr_svg("${url}", "${shape}", ${resolution}, ${rotation}, "${fill}")`
+        );
+        return result as string;
+      }
     },
     [pyodide]
   );
