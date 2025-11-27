@@ -190,6 +190,7 @@ export default function Home() {
   const [fillImage, setFillImage] = useState<string | null>(null);
   const [moduleStyle, setModuleStyle] = useState<ModuleStyle>("blocks");
   const [transparentBg, setTransparentBg] = useState(false);
+  const [artisticEffect, setArtisticEffect] = useState<"none" | "favicon-mosaic">("none");
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -330,7 +331,7 @@ export default function Home() {
                 </div>
                 
                 {/* Shape Grid */}
-                <div className="grid grid-cols-6 gap-2">
+                <div className="flex gap-2">
                   {shapeList.map((s) => (
                     <button
                       key={s}
@@ -338,14 +339,14 @@ export default function Home() {
                         setShape(s);
                         setRotation(0);
                       }}
-                      className={`aspect-square p-2 rounded-lg border-2 transition flex items-center justify-center ${
+                      className={`w-12 h-12 rounded-lg border-2 transition flex items-center justify-center ${
                         shape === s
                           ? "border-zinc-900 bg-zinc-50"
                           : "border-zinc-200 hover:border-zinc-400 hover:bg-zinc-50"
                       }`}
                       title={shapeConfigs[s].label}
                     >
-                      <svg viewBox="0 0 40 40" className="w-full h-full max-w-[32px] max-h-[32px]">
+                      <svg viewBox="0 0 40 40" className="w-6 h-6">
                         {shapeConfigs[s].usePath ? (
                           <path
                             d={shapeConfigs[s].getPoints(18, 20, 20)}
@@ -366,7 +367,7 @@ export default function Home() {
               {/* Module Style Selection */}
               <div className="flex flex-col gap-3">
                 <label className="text-sm font-medium text-zinc-700">
-                  Module Style
+                Pixel Style
                 </label>
                 <div className="flex gap-2">
                   <button
@@ -500,6 +501,41 @@ export default function Home() {
                     Image will show through where QR modules are black
                   </p>
                 )}
+              </div>
+
+              {/* Artistic Effects */}
+              <div className="flex flex-col gap-3">
+                <label className="text-sm font-medium text-zinc-700">
+                  Artistic Effects
+                </label>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setArtisticEffect("none")}
+                    className={`flex items-center gap-2 px-3 py-2 rounded-lg border-2 transition ${
+                      artisticEffect === "none"
+                        ? "border-zinc-900 bg-zinc-50"
+                        : "border-zinc-200 hover:border-zinc-400"
+                    }`}
+                  >
+                    <span className="text-sm text-zinc-700">None</span>
+                  </button>
+                  <button
+                    onClick={() => setArtisticEffect("favicon-mosaic")}
+                    className={`flex items-center gap-2 px-3 py-2 rounded-lg border-2 transition ${
+                      artisticEffect === "favicon-mosaic"
+                        ? "border-zinc-900 bg-zinc-50"
+                        : "border-zinc-200 hover:border-zinc-400"
+                    }`}
+                  >
+                    <svg viewBox="0 0 24 24" className="w-5 h-5">
+                      <rect x="2" y="2" width="9" height="9" rx="2" fill={artisticEffect === "favicon-mosaic" ? "#3b82f6" : "#a1a1aa"} />
+                      <rect x="13" y="2" width="9" height="9" rx="2" fill={artisticEffect === "favicon-mosaic" ? "#ef4444" : "#a1a1aa"} />
+                      <rect x="2" y="13" width="9" height="9" rx="2" fill={artisticEffect === "favicon-mosaic" ? "#22c55e" : "#a1a1aa"} />
+                      <rect x="13" y="13" width="9" height="9" rx="2" fill={artisticEffect === "favicon-mosaic" ? "#eab308" : "#a1a1aa"} />
+                    </svg>
+                    <span className="text-sm text-zinc-700">Favicon Mosaic</span>
+                  </button>
+                </div>
               </div>
 
               {/* Transparent Background */}
