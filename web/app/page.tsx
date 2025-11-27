@@ -368,7 +368,7 @@ export default function Home() {
                 <div className="flex gap-2">
                   <button
                     onClick={() => setModuleStyle("blocks")}
-                    className={`flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded-lg border-2 transition ${
+                    className={`flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-lg border-2 transition ${
                       moduleStyle === "blocks"
                         ? "border-zinc-900 bg-zinc-50"
                         : "border-zinc-200 hover:border-zinc-400"
@@ -384,7 +384,7 @@ export default function Home() {
                   </button>
                   <button
                     onClick={() => setModuleStyle("circles")}
-                    className={`flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded-lg border-2 transition ${
+                    className={`flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-lg border-2 transition ${
                       moduleStyle === "circles"
                         ? "border-zinc-900 bg-zinc-50"
                         : "border-zinc-200 hover:border-zinc-400"
@@ -396,7 +396,22 @@ export default function Home() {
                       <circle cx="6" cy="18" r="4" fill={moduleStyle === "circles" ? color : "#a1a1aa"} />
                       <circle cx="18" cy="18" r="4" fill={moduleStyle === "circles" ? color : "#a1a1aa"} />
                     </svg>
-                    <span className="text-sm text-zinc-700">Circles</span>
+                    <span className="text-sm text-zinc-700">Dots</span>
+                  </button>
+                  <button
+                    onClick={() => setModuleStyle("lines")}
+                    className={`flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-lg border-2 transition ${
+                      moduleStyle === "lines"
+                        ? "border-zinc-900 bg-zinc-50"
+                        : "border-zinc-200 hover:border-zinc-400"
+                    }`}
+                  >
+                    <svg viewBox="0 0 24 24" className="w-5 h-5">
+                      <rect x="2" y="2" width="20" height="8" rx="4" fill={moduleStyle === "lines" ? color : "#a1a1aa"} />
+                      <rect x="2" y="14" width="8" height="8" rx="4" fill={moduleStyle === "lines" ? color : "#a1a1aa"} />
+                      <rect x="14" y="14" width="8" height="8" rx="4" fill={moduleStyle === "lines" ? color : "#a1a1aa"} />
+                    </svg>
+                    <span className="text-sm text-zinc-700">Lines</span>
                   </button>
                 </div>
               </div>

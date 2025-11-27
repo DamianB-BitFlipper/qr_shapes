@@ -5,7 +5,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type PyodideInterface = any;
 
-export type ModuleStyle = "blocks" | "circles";
+export type ModuleStyle = "blocks" | "circles" | "lines";
 
 export interface QRData {
   qrModules: [number, number][];
@@ -173,6 +173,219 @@ function buildCircularMergedPath(modules: [number, number][]): string {
       `a${radius} ${radius} 0 1 0 ${radius * 2} 0 ` +
       `a${radius} ${radius} 0 1 0 ${-radius * 2} 0`
     );
+  }
+
+  return paths.join(" ");
+}
+
+/**
+ * Build a merged path with rounded corners for connected modules.
+ * Adjacent modules are joined into lines/shapes with rounded ends and corners.
+ */
+function buildLinesMergedPath(modules: [number, number][]): string {
+  if (modules.length === 0) return "";
+
+  const moduleSet = new Set<string>();
+  for (const [x, y] of modules) {
+    moduleSet.add(`${x},${y}`);
+  }
+
+  const hasModule = (x: number, y: number): boolean => moduleSet.has(`${x},${y}`);
+
+  const radius = 0.45;
+  const paths: string[] = [];
+  const visited = new Set<string>();
+
+  // Helper to create a rounded rectangle path
+  const roundedRect = (x: number, y: number, w: number, h: number, r: number): string => {
+    const x1 = x + r;
+    const x2 = x + w - r;
+    const y1 = y + r;
+    const y2 = y + h - r;
+    return `M${x1} ${y} L${x2} ${y} Q${x + w} ${y} ${x + w} ${y1} L${x + w} ${y2} Q${x + w} ${y + h} ${x2} ${y + h} L${x1} ${y + h} Q${x} ${y + h} ${x} ${y2} L${x} ${y1} Q${x} ${y} ${x1} ${y} Z`;
+  };
+
+  // Find horizontal runs first
+  for (const [x, y] of modules) {
+    const key = `${x},${y}`;
+    if (visited.has(key)) continue;
+
+    // Check if this is part of a horizontal run
+    let runStartX = x;
+    let runEndX = x;
+
+    // Extend left
+    while (hasModule(runStartX - 1, y) && !visited.has(`${runStartX - 1},${y}`)) {
+      runStartX--;
+    }
+    // Extend right
+    while (hasModule(runEndX + 1, y) && !visited.has(`${runEndX + 1},${y}`)) {
+      runEndX++;
+    }
+
+    const runLength = runEndX - runStartX + 1;
+
+    // Only create horizontal run if length > 1 and no vertical neighbors that would make it complex
+    if (runLength > 1) {
+      // Mark all in this run as visited
+      for (let rx = runStartX; rx <= runEndX; rx++) {
+        visited.add(`${rx},${y}`);
+      }
+      
+      // Draw rounded pill for horizontal run
+      const margin = 0.5 - radius;
+      paths.push(roundedRect(
+        runStartX + margin,
+        y + margin,
+        runLength - 2 * margin,
+        1 - 2 * margin,
+        radius
+      ));
+    }
+  }
+
+  // Find vertical runs for remaining unvisited modules
+  for (const [x, y] of modules) {
+    const key = `${x},${y}`;
+    if (visited.has(key)) continue;
+
+    // Check if this is part of a vertical run
+    let runStartY = y;
+    let runEndY = y;
+
+    // Extend up
+    while (hasModule(x, runStartY - 1) && !visited.has(`${x},${runStartY - 1}`)) {
+      runStartY--;
+    }
+    // Extend down
+    while (hasModule(x, runEndY + 1) && !visited.has(`${x},${runEndY + 1}`)) {
+      runEndY++;
+    }
+
+    const runLength = runEndY - runStartY + 1;
+
+    if (runLength > 1) {
+      // Mark all in this run as visited
+      for (let ry = runStartY; ry <= runEndY; ry++) {
+        visited.add(`${x},${ry}`);
+      }
+      
+      // Draw rounded pill for vertical run
+      const margin = 0.5 - radius;
+      paths.push(roundedRect(
+        x + margin,
+        runStartY + margin,
+        1 - 2 * margin,
+        runLength - 2 * margin,
+        radius
+      ));
+    }
+  }
+
+  // Draw circles for any remaining isolated modules
+  for (const [x, y] of modules) {
+    const key = `${x},${y}`;
+    if (visited.has(key)) continue;
+    visited.add(key);
+
+    const cx = x + 0.5;
+    const cy = y + 0.5;
+    paths.push(
+      `M${cx - radius} ${cy} ` +
+      `a${radius} ${radius} 0 1 0 ${radius * 2} 0 ` +
+      `a${radius} ${radius} 0 1 0 ${-radius * 2} 0`
+    );
+  }
+
+  return paths.join(" ");
+}
+
+/**
+ * Generate SVG path for a rounded square finder pattern.
+ * Three concentric rounded squares: outer black, middle white, inner black.
+ */
+function buildLinesFinderPatternPath(x: number, y: number): string {
+  const cornerRadius = 1.0;
+  const innerCornerRadius = 0.7;
+  const centerCornerRadius = 0.5;
+  
+  // Helper to create a rounded rectangle path
+  const roundedRect = (rx: number, ry: number, w: number, h: number, r: number): string => {
+    const x1 = rx + r;
+    const x2 = rx + w - r;
+    const y1 = ry + r;
+    const y2 = ry + h - r;
+    return `M${x1} ${ry} L${x2} ${ry} Q${rx + w} ${ry} ${rx + w} ${y1} L${rx + w} ${y2} Q${rx + w} ${ry + h} ${x2} ${ry + h} L${x1} ${ry + h} Q${rx} ${ry + h} ${rx} ${y2} L${rx} ${y1} Q${rx} ${ry} ${x1} ${ry} Z`;
+  };
+  
+  // Outer rounded square (7x7)
+  const outer = roundedRect(x, y, 7, 7, cornerRadius);
+  // Middle rounded square (5x5, 1 module inset)
+  const middle = roundedRect(x + 1, y + 1, 5, 5, innerCornerRadius);
+  // Inner rounded square (3x3, 2 modules inset)
+  const inner = roundedRect(x + 2, y + 2, 3, 3, centerCornerRadius);
+  
+  return `${outer} ${middle} ${inner}`;
+}
+
+/**
+ * Generate SVG path for a rounded square alignment pattern.
+ */
+function buildLinesAlignmentPatternPath(centerX: number, centerY: number): string {
+  const x = centerX - 2;
+  const y = centerY - 2;
+  const cornerRadius = 0.7;
+  const innerCornerRadius = 0.5;
+  const centerCornerRadius = 0.3;
+  
+  const roundedRect = (rx: number, ry: number, w: number, h: number, r: number): string => {
+    const x1 = rx + r;
+    const x2 = rx + w - r;
+    const y1 = ry + r;
+    const y2 = ry + h - r;
+    return `M${x1} ${ry} L${x2} ${ry} Q${rx + w} ${ry} ${rx + w} ${y1} L${rx + w} ${y2} Q${rx + w} ${ry + h} ${x2} ${ry + h} L${x1} ${ry + h} Q${rx} ${ry + h} ${rx} ${y2} L${rx} ${y1} Q${rx} ${ry} ${x1} ${ry} Z`;
+  };
+  
+  // Outer (5x5)
+  const outer = roundedRect(x, y, 5, 5, cornerRadius);
+  // Middle (3x3)
+  const middle = roundedRect(x + 1, y + 1, 3, 3, innerCornerRadius);
+  // Inner (1x1)
+  const inner = roundedRect(x + 2, y + 2, 1, 1, centerCornerRadius);
+  
+  return `${outer} ${middle} ${inner}`;
+}
+
+/**
+ * Build all finder and alignment pattern paths for the QR code (lines style).
+ */
+function buildLinesPatternPaths(qrData: QRData): string {
+  const [originX, originY] = qrData.qrOrigin;
+  const size = qrData.qrSize;
+  const version = qrData.version;
+
+  const paths: string[] = [];
+
+  // Three finder patterns at corners
+  paths.push(buildLinesFinderPatternPath(originX, originY));
+  paths.push(buildLinesFinderPatternPath(originX + size - 7, originY));
+  paths.push(buildLinesFinderPatternPath(originX, originY + size - 7));
+
+  // Alignment patterns (version 2+)
+  const alignmentPositions = getAlignmentPatternPositions(version);
+  if (alignmentPositions.length > 0) {
+    const finderCenters = new Set([
+      `6,6`,
+      `6,${size - 7}`,
+      `${size - 7},6`,
+    ]);
+
+    for (const row of alignmentPositions) {
+      for (const col of alignmentPositions) {
+        if (finderCenters.has(`${col},${row}`)) continue;
+        paths.push(buildLinesAlignmentPatternPath(originX + col, originY + row));
+      }
+    }
   }
 
   return paths.join(" ");
@@ -415,14 +628,24 @@ function buildSVG(
 
   // Build merged path from all modules based on style
   const allModules = [...qrData.qrModules, ...qrData.noiseModules];
-  const mergedPath = style === "circles" 
-    ? buildCircularMergedPath(allModules)
-    : buildMergedPath(allModules);
+  let mergedPath: string;
+  if (style === "circles") {
+    mergedPath = buildCircularMergedPath(allModules);
+  } else if (style === "lines") {
+    mergedPath = buildLinesMergedPath(allModules);
+  } else {
+    mergedPath = buildMergedPath(allModules);
+  }
 
   // Build finder and alignment pattern paths based on style
-  const patternPath = style === "circles"
-    ? buildCircularPatternPaths(qrData)
-    : buildPatternPaths(qrData);
+  let patternPath: string;
+  if (style === "circles") {
+    patternPath = buildCircularPatternPaths(qrData);
+  } else if (style === "lines") {
+    patternPath = buildLinesPatternPaths(qrData);
+  } else {
+    patternPath = buildPatternPaths(qrData);
+  }
 
   return `<?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"
@@ -516,18 +739,89 @@ function getRegionLuminance(
  */
 function svgPathToPath2D(pathData: string, scale: number, offsetX: number, offsetY: number): Path2D {
   const path = new Path2D();
-  const commands = pathData.match(/[MLHVCSQTAZ][^MLHVCSQTAZ]*/gi) || [];
+  const commands = pathData.match(/[MLHVCSQTAZmlhvcsqtaz][^MLHVCSQTAZmlhvcsqtaz]*/gi) || [];
+  
+  let currentX = 0;
+  let currentY = 0;
   
   for (const cmd of commands) {
-    const type = cmd[0].toUpperCase();
-    const args = cmd.slice(1).trim().split(/[\s,]+/).map(Number);
+    const type = cmd[0];
+    const args = cmd.slice(1).trim().split(/[\s,]+/).filter(s => s.length > 0).map(Number);
     
-    switch (type) {
+    switch (type.toUpperCase()) {
       case "M":
-        path.moveTo((args[0] - offsetX) * scale, (args[1] - offsetY) * scale);
+        if (type === "m") {
+          currentX += args[0];
+          currentY += args[1];
+        } else {
+          currentX = args[0];
+          currentY = args[1];
+        }
+        path.moveTo((currentX - offsetX) * scale, (currentY - offsetY) * scale);
         break;
       case "L":
-        path.lineTo((args[0] - offsetX) * scale, (args[1] - offsetY) * scale);
+        if (type === "l") {
+          currentX += args[0];
+          currentY += args[1];
+        } else {
+          currentX = args[0];
+          currentY = args[1];
+        }
+        path.lineTo((currentX - offsetX) * scale, (currentY - offsetY) * scale);
+        break;
+      case "H":
+        if (type === "h") {
+          currentX += args[0];
+        } else {
+          currentX = args[0];
+        }
+        path.lineTo((currentX - offsetX) * scale, (currentY - offsetY) * scale);
+        break;
+      case "V":
+        if (type === "v") {
+          currentY += args[0];
+        } else {
+          currentY = args[0];
+        }
+        path.lineTo((currentX - offsetX) * scale, (currentY - offsetY) * scale);
+        break;
+      case "Q":
+        if (type === "q") {
+          const cpx = currentX + args[0];
+          const cpy = currentY + args[1];
+          currentX += args[2];
+          currentY += args[3];
+          path.quadraticCurveTo(
+            (cpx - offsetX) * scale,
+            (cpy - offsetY) * scale,
+            (currentX - offsetX) * scale,
+            (currentY - offsetY) * scale
+          );
+        } else {
+          const cpx = args[0];
+          const cpy = args[1];
+          currentX = args[2];
+          currentY = args[3];
+          path.quadraticCurveTo(
+            (cpx - offsetX) * scale,
+            (cpy - offsetY) * scale,
+            (currentX - offsetX) * scale,
+            (currentY - offsetY) * scale
+          );
+        }
+        break;
+      case "A":
+        // Arc command - simplified handling for circular arcs
+        // a rx ry x-axis-rotation large-arc-flag sweep-flag x y
+        if (type === "a") {
+          currentX += args[5];
+          currentY += args[6];
+        } else {
+          currentX = args[5];
+          currentY = args[6];
+        }
+        // For now, just move to the endpoint - full arc support would need more complex handling
+        path.lineTo((currentX - offsetX) * scale, (currentY - offsetY) * scale);
         break;
       case "Z":
         path.closePath();
@@ -629,6 +923,127 @@ function drawCircularPatterns(
         if (finderCenters.has(`${col},${row}`)) continue;
 
         drawCircularAlignmentPattern(
+          ctx,
+          toCanvasX(originX + col),
+          toCanvasY(originY + row),
+          scale
+        );
+      }
+    }
+  }
+}
+
+/**
+ * Helper to draw a rounded rectangle on canvas.
+ */
+function drawRoundedRect(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  radius: number
+): void {
+  ctx.beginPath();
+  ctx.moveTo(x + radius, y);
+  ctx.lineTo(x + width - radius, y);
+  ctx.quadraticCurveTo(x + width, y, x + width, y + radius);
+  ctx.lineTo(x + width, y + height - radius);
+  ctx.quadraticCurveTo(x + width, y + height, x + width - radius, y + height);
+  ctx.lineTo(x + radius, y + height);
+  ctx.quadraticCurveTo(x, y + height, x, y + height - radius);
+  ctx.lineTo(x, y + radius);
+  ctx.quadraticCurveTo(x, y, x + radius, y);
+  ctx.closePath();
+  ctx.fill();
+}
+
+/**
+ * Draw a rounded square finder pattern on a canvas context.
+ */
+function drawLinesFinderPattern(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  scale: number
+): void {
+  const cornerRadius = 1.0 * scale;
+  const innerCornerRadius = 0.7 * scale;
+  const centerCornerRadius = 0.5 * scale;
+  
+  // Outer black rounded square (7x7)
+  ctx.fillStyle = "black";
+  drawRoundedRect(ctx, x, y, 7 * scale, 7 * scale, cornerRadius);
+  
+  // Middle white rounded square (5x5)
+  ctx.fillStyle = "white";
+  drawRoundedRect(ctx, x + scale, y + scale, 5 * scale, 5 * scale, innerCornerRadius);
+  
+  // Inner black rounded square (3x3)
+  ctx.fillStyle = "black";
+  drawRoundedRect(ctx, x + 2 * scale, y + 2 * scale, 3 * scale, 3 * scale, centerCornerRadius);
+}
+
+/**
+ * Draw a rounded square alignment pattern on a canvas context.
+ */
+function drawLinesAlignmentPattern(
+  ctx: CanvasRenderingContext2D,
+  centerX: number,
+  centerY: number,
+  scale: number
+): void {
+  const x = centerX - 2 * scale;
+  const y = centerY - 2 * scale;
+  const cornerRadius = 0.7 * scale;
+  const innerCornerRadius = 0.5 * scale;
+  const centerCornerRadius = 0.3 * scale;
+  
+  // Outer black rounded square (5x5)
+  ctx.fillStyle = "black";
+  drawRoundedRect(ctx, x, y, 5 * scale, 5 * scale, cornerRadius);
+  
+  // Middle white rounded square (3x3)
+  ctx.fillStyle = "white";
+  drawRoundedRect(ctx, x + scale, y + scale, 3 * scale, 3 * scale, innerCornerRadius);
+  
+  // Inner black rounded square (1x1)
+  ctx.fillStyle = "black";
+  drawRoundedRect(ctx, x + 2 * scale, y + 2 * scale, scale, scale, centerCornerRadius);
+}
+
+/**
+ * Draw all finder and alignment patterns on a canvas (lines style).
+ */
+function drawLinesPatterns(
+  ctx: CanvasRenderingContext2D,
+  qrData: QRData,
+  scale: number,
+  offsetX: number,
+  offsetY: number
+): void {
+  const [originX, originY] = qrData.qrOrigin;
+  const size = qrData.qrSize;
+  const version = qrData.version;
+
+  const toCanvasX = (qrX: number) => (qrX - offsetX) * scale;
+  const toCanvasY = (qrY: number) => (qrY - offsetY) * scale;
+
+  // Three finder patterns at corners
+  drawLinesFinderPattern(ctx, toCanvasX(originX), toCanvasY(originY), scale);
+  drawLinesFinderPattern(ctx, toCanvasX(originX + size - 7), toCanvasY(originY), scale);
+  drawLinesFinderPattern(ctx, toCanvasX(originX), toCanvasY(originY + size - 7), scale);
+
+  // Alignment patterns (version 2+)
+  const alignmentPositions = getAlignmentPatternPositions(version);
+  if (alignmentPositions.length > 0) {
+    const finderCenters = new Set([`6,6`, `6,${size - 7}`, `${size - 7},6`]);
+
+    for (const row of alignmentPositions) {
+      for (const col of alignmentPositions) {
+        if (finderCenters.has(`${col},${row}`)) continue;
+
+        drawLinesAlignmentPattern(
           ctx,
           toCanvasX(originX + col),
           toCanvasY(originY + row),
@@ -788,9 +1203,14 @@ function renderQRWithImage(
       
       // Build merged path from all modules based on style
       const allModules = [...qrData.qrModules, ...qrData.noiseModules];
-      const mergedPathData = style === "circles"
-        ? buildCircularMergedPath(allModules)
-        : buildMergedPath(allModules);
+      let mergedPathData: string;
+      if (style === "circles") {
+        mergedPathData = buildCircularMergedPath(allModules);
+      } else if (style === "lines") {
+        mergedPathData = buildLinesMergedPath(allModules);
+      } else {
+        mergedPathData = buildMergedPath(allModules);
+      }
       
       // Convert to Path2D for clipping
       const clipPath = svgPathToPath2D(mergedPathData, scale, vb.min_x, vb.min_y);
@@ -829,6 +1249,8 @@ function renderQRWithImage(
       // Draw finder and alignment patterns on top based on style
       if (style === "circles") {
         drawCircularPatterns(ctx, qrData, scale, vb.min_x, vb.min_y);
+      } else if (style === "lines") {
+        drawLinesPatterns(ctx, qrData, scale, vb.min_x, vb.min_y);
       } else {
         drawPatterns(ctx, qrData, scale, vb.min_x, vb.min_y);
       }
