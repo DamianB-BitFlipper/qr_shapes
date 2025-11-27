@@ -19,7 +19,138 @@ export interface QRData {
 }
 
 /**
+ * Build a merged path from module coordinates by tracing boundaries.
+ * 
+ * Each module is a unit square at grid position (x, y), occupying pixel space [x, x+1] × [y, y+1].
+ * We trace the boundary clockwise (keeping filled cells on our right), outputting vertices.
+ */
+function buildMergedPath(modules: [number, number][]): string {
+  if (modules.length === 0) return "";
+
+  // Create a set for O(1) lookup
+  const moduleSet = new Set<string>();
+  for (const [x, y] of modules) {
+    moduleSet.add(`${x},${y}`);
+  }
+
+  const hasModule = (x: number, y: number): boolean => moduleSet.has(`${x},${y}`);
+
+  // Track which directed edges we've visited
+  const visitedEdges = new Set<string>();
+
+  // A directed edge goes from vertex (x1,y1) to vertex (x2,y2)
+  // We trace clockwise, so filled cell is always on the RIGHT of our direction
+  type DirEdge = { x1: number; y1: number; x2: number; y2: number };
+
+  const edgeKey = (e: DirEdge): string => `${e.x1},${e.y1}-${e.x2},${e.y2}`;
+
+  // Build the list of all boundary edges
+  // For a module at (mx, my), its boundary edges are those where the neighbor is empty
+  const boundaryEdges: DirEdge[] = [];
+  for (const [mx, my] of modules) {
+    // Top edge: if no module above, edge goes left-to-right (y stays at my)
+    if (!hasModule(mx, my - 1)) {
+      boundaryEdges.push({ x1: mx, y1: my, x2: mx + 1, y2: my });
+    }
+    // Right edge: if no module to the right, edge goes top-to-bottom (x stays at mx+1)
+    if (!hasModule(mx + 1, my)) {
+      boundaryEdges.push({ x1: mx + 1, y1: my, x2: mx + 1, y2: my + 1 });
+    }
+    // Bottom edge: if no module below, edge goes right-to-left (y stays at my+1)
+    if (!hasModule(mx, my + 1)) {
+      boundaryEdges.push({ x1: mx + 1, y1: my + 1, x2: mx, y2: my + 1 });
+    }
+    // Left edge: if no module to the left, edge goes bottom-to-top (x stays at mx)
+    if (!hasModule(mx - 1, my)) {
+      boundaryEdges.push({ x1: mx, y1: my + 1, x2: mx, y2: my });
+    }
+  }
+
+  // Build a map from start vertex to list of edges starting there
+  const edgesFromVertex = new Map<string, DirEdge[]>();
+  for (const edge of boundaryEdges) {
+    const key = `${edge.x1},${edge.y1}`;
+    if (!edgesFromVertex.has(key)) {
+      edgesFromVertex.set(key, []);
+    }
+    edgesFromVertex.get(key)!.push(edge);
+  }
+
+  // Given an incoming edge direction, find the next edge from the endpoint
+  // We want to turn RIGHT as much as possible (tightest clockwise turn)
+  const getNextEdge = (current: DirEdge): DirEdge | null => {
+    const endKey = `${current.x2},${current.y2}`;
+    const candidates = edgesFromVertex.get(endKey);
+    if (!candidates || candidates.length === 0) return null;
+
+    // Direction we arrived from (incoming direction vector)
+    const dx = current.x2 - current.x1;
+    const dy = current.y2 - current.y1;
+
+    // For clockwise boundary tracing (keeping filled on right), we want the tightest right turn.
+    // In screen coordinates (y down), cross product > 0 means clockwise turn.
+    // We use atan2(-cross, dot) to get angle where clockwise is negative.
+    // Then we pick the minimum angle (most clockwise turn).
+    
+    let bestEdge: DirEdge | null = null;
+    let bestAngle = Infinity;
+
+    for (const candidate of candidates) {
+      const cdx = candidate.x2 - candidate.x1;
+      const cdy = candidate.y2 - candidate.y1;
+      
+      // Cross product in screen coords: positive = clockwise turn (right)
+      const cross = dx * cdy - dy * cdx;
+      const dot = dx * cdx + dy * cdy;
+      
+      // atan2(-cross, dot) gives us angle where right turn is negative
+      const angle = Math.atan2(-cross, dot);
+      
+      if (angle < bestAngle) {
+        bestAngle = angle;
+        bestEdge = candidate;
+      }
+    }
+
+    return bestEdge;
+  };
+
+  const pathParts: string[] = [];
+
+  // Trace all closed loops
+  for (const startEdge of boundaryEdges) {
+    const startKey = edgeKey(startEdge);
+    if (visitedEdges.has(startKey)) continue;
+
+    // Trace this loop
+    const points: { x: number; y: number }[] = [];
+    let currentEdge: DirEdge | null = startEdge;
+
+    while (currentEdge) {
+      const key = edgeKey(currentEdge);
+      if (visitedEdges.has(key)) break;
+      visitedEdges.add(key);
+
+      points.push({ x: currentEdge.x1, y: currentEdge.y1 });
+
+      currentEdge = getNextEdge(currentEdge);
+      if (currentEdge && edgeKey(currentEdge) === startKey) break;
+    }
+
+    if (points.length >= 3) {
+      const pathData = points
+        .map((p, i) => (i === 0 ? `M${p.x} ${p.y}` : `L${p.x} ${p.y}`))
+        .join(" ");
+      pathParts.push(pathData + " Z");
+    }
+  }
+
+  return pathParts.join(" ");
+}
+
+/**
  * Build SVG string from QR data coordinates.
+ * Adjacent modules are merged into unified shapes without visible borders.
  */
 function buildSVG(
   qrData: QRData,
@@ -48,20 +179,16 @@ function buildSVG(
     fillAttr = "url(#imgPattern)";
   }
 
-  // Build all rect elements
+  // Build merged path from all modules
   const allModules = [...qrData.qrModules, ...qrData.noiseModules];
-  const rects = allModules
-    .map(([x, y]) => `<rect x="${x}" y="${y}" width="1" height="1"/>`)
-    .join("");
+  const mergedPath = buildMergedPath(allModules);
 
   return `<?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"
      width="${svgWidth}" height="${svgHeight}" viewBox="${vbStr}">
   ${patternDef}
   <rect x="${vb.min_x}" y="${vb.min_y}" width="${vb.width}" height="${vb.height}" fill="white"/>
-  <g fill="${fillAttr}">
-    ${rects}
-  </g>
+  <path d="${mergedPath}" fill="${fillAttr}"/>
 </svg>`;
 }
 
@@ -143,9 +270,37 @@ function getRegionLuminance(
 }
 
 /**
+ * Parse SVG path data and create a Path2D for canvas clipping.
+ */
+function svgPathToPath2D(pathData: string, scale: number, offsetX: number, offsetY: number): Path2D {
+  const path = new Path2D();
+  const commands = pathData.match(/[MLHVCSQTAZ][^MLHVCSQTAZ]*/gi) || [];
+  
+  for (const cmd of commands) {
+    const type = cmd[0].toUpperCase();
+    const args = cmd.slice(1).trim().split(/[\s,]+/).map(Number);
+    
+    switch (type) {
+      case "M":
+        path.moveTo((args[0] - offsetX) * scale, (args[1] - offsetY) * scale);
+        break;
+      case "L":
+        path.lineTo((args[0] - offsetX) * scale, (args[1] - offsetY) * scale);
+        break;
+      case "Z":
+        path.closePath();
+        break;
+    }
+  }
+  
+  return path;
+}
+
+/**
  * Render QR code with image showing only within the shape boundary.
  * The image is visible through the QR modules and noise modules,
  * with contrast-aware darkening/lightening for scanability.
+ * Uses merged path clipping for seamless adjacent modules.
  */
 function renderQRWithImage(
   qrData: QRData,
@@ -161,7 +316,7 @@ function renderQRWithImage(
       const canvasWidth = resolution;
       const canvasHeight = Math.round(resolution * (vb.height / vb.width));
       
-      // Create a temporary canvas to get image data
+      // Create a temporary canvas to get image data for luminance analysis
       const imgCanvas = document.createElement("canvas");
       imgCanvas.width = canvasWidth;
       imgCanvas.height = canvasHeight;
@@ -185,47 +340,47 @@ function renderQRWithImage(
         return;
       }
       
-      // Start with white background (areas outside shape will stay white)
+      // Start with white background
       ctx.fillStyle = "white";
       ctx.fillRect(0, 0, canvas.width, canvas.height);
       
-      // Helper to convert viewbox coords to canvas coords
-      const toCanvasX = (x: number) => (x - vb.min_x) * scale;
-      const toCanvasY = (y: number) => (y - vb.min_y) * scale;
-      const moduleSize = scale; // Each module is 1 unit in viewbox coords
-      
-      // All modules (QR + noise) define where the image is visible
+      // Build merged path from all modules
       const allModules = [...qrData.qrModules, ...qrData.noiseModules];
+      const mergedPathData = buildMergedPath(allModules);
+      
+      // Convert to Path2D for clipping
+      const clipPath = svgPathToPath2D(mergedPathData, scale, vb.min_x, vb.min_y);
+      
+      // Draw the image clipped to the merged shape
+      ctx.save();
+      ctx.clip(clipPath);
+      ctx.drawImage(imgCanvas, 0, 0);
+      ctx.restore();
+      
+      // Calculate average luminance of the clipped area
+      const moduleSize = scale;
+      let totalLuminance = 0;
+      let moduleCount = 0;
       
       for (const [mx, my] of allModules) {
-        const canvasX = toCanvasX(mx);
-        const canvasY = toCanvasY(my);
-        
-        // Get luminance of the region under this module
-        const luminance = getRegionLuminance(
-          imageData,
-          canvasX,
-          canvasY,
-          moduleSize,
-          moduleSize
-        );
-        
-        // First, draw the image portion for this module
-        ctx.drawImage(
-          imgCanvas,
-          canvasX, canvasY, moduleSize, moduleSize,  // Source rect
-          canvasX, canvasY, moduleSize, moduleSize   // Dest rect
-        );
-        
-        // Then overlay a semi-transparent layer for contrast
-        // If background is light, darken it; if dark, lighten it
-        if (luminance > 0.5) {
-          ctx.fillStyle = "rgba(0, 0, 0, 0.4)";
-        } else {
-          ctx.fillStyle = "rgba(255, 255, 255, 0.4)";
-        }
-        ctx.fillRect(canvasX, canvasY, moduleSize, moduleSize);
+        const canvasX = (mx - vb.min_x) * scale;
+        const canvasY = (my - vb.min_y) * scale;
+        totalLuminance += getRegionLuminance(imageData, canvasX, canvasY, moduleSize, moduleSize);
+        moduleCount++;
       }
+      
+      const avgLuminance = moduleCount > 0 ? totalLuminance / moduleCount : 0.5;
+      
+      // Apply a single overlay for contrast over the entire clipped region
+      ctx.save();
+      ctx.clip(clipPath);
+      if (avgLuminance > 0.5) {
+        ctx.fillStyle = "rgba(0, 0, 0, 0.4)";
+      } else {
+        ctx.fillStyle = "rgba(255, 255, 255, 0.4)";
+      }
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.restore();
       
       const dataUrl = canvas.toDataURL("image/png");
       const base64 = dataUrl.replace(/^data:image\/png;base64,/, "");
