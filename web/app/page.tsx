@@ -111,7 +111,7 @@ const shapeConfigs: Record<Shape, ShapeConfig> = {
     usePath: true,
     getPoints: (size, cx, cy) => {
       // Heart curve: x = 16sin³(t), y = 13cos(t) - 5cos(2t) - 2cos(3t) - cos(4t)
-      // Scaled to fit in size, with point up at 0° rotation
+      // Scaled to fit in size, with point down at 0° rotation (classic heart ❤️)
       const scale = size / 17;
       const points = [];
       const steps = 60;
@@ -120,7 +120,7 @@ const shapeConfigs: Record<Shape, ShapeConfig> = {
         const sinT = Math.sin(t);
         const cosT = Math.cos(t);
         const x = 16 * Math.pow(sinT, 3);
-        // Negative y to flip heart so it points up
+        // Negative y to flip heart so lobes are at top, point at bottom
         const y = -(13 * cosT - 5 * Math.cos(2 * t) - 2 * Math.cos(3 * t) - Math.cos(4 * t));
         const px = cx + x * scale;
         const py = cy + y * scale;
@@ -129,9 +129,9 @@ const shapeConfigs: Record<Shape, ShapeConfig> = {
       return points.join(" ") + " Z";
     },
     presets: [
-      { label: "Point Up", value: 0 },
+      { label: "Point Down", value: 0 },
       { label: "Point Right", value: 90 },
-      { label: "Point Down", value: 180 },
+      { label: "Point Up", value: 180 },
       { label: "Point Left", value: 270 },
     ],
   },

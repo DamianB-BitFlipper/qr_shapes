@@ -10,8 +10,8 @@ class Heart(BaseShape):  # type: ignore[name-defined]
     """A heart shape that can contain a QR code.
 
     The heart is defined using a parametric equation scaled to fit within
-    a unit circle. At 0° rotation, the heart points upward (top of heart
-    at the top).
+    a unit circle. At 0° rotation, the heart is in classic orientation with
+    lobes at the top and point at the bottom (❤️).
 
     The shape uses the classic heart curve:
         x = 16 * sin³(t)
@@ -33,9 +33,9 @@ class Heart(BaseShape):  # type: ignore[name-defined]
     @property
     def rotation_presets(self) -> list[tuple[str, int]]:
         return [
-            ("Point Up", 0),
+            ("Point Down", 0),
             ("Point Right", 90),
-            ("Point Down", 180),
+            ("Point Up", 180),
             ("Point Left", 270),
         ]
 
