@@ -11,10 +11,10 @@ class Heart(BaseShape):  # type: ignore[name-defined]
 
     The heart is defined using a parametric equation scaled to fit within
     a unit circle. At 0° rotation, the heart is in classic orientation with
-    lobes at the top and point at the bottom (❤️).
+    lobes at the top and point at the bottom.
 
     The shape uses the classic heart curve:
-        x = 16 * sin³(t)
+        x = 16 * sin^3(t)
         y = 13*cos(t) - 5*cos(2t) - 2*cos(3t) - cos(4t)
     Normalized to fit within a unit circle.
     """
@@ -25,19 +25,6 @@ class Heart(BaseShape):  # type: ignore[name-defined]
 
     # Cache for precomputed edge arrays
     _HEART_CACHE: dict = {}
-
-    @property
-    def name(self) -> str:
-        return "Heart"
-
-    @property
-    def rotation_presets(self) -> list[tuple[str, int]]:
-        return [
-            ("Point Down", 0),
-            ("Point Right", 90),
-            ("Point Up", 180),
-            ("Point Left", 270),
-        ]
 
     def _get_heart_edges(
         self, num_samples: int = 1024

@@ -20,20 +20,6 @@ class Hexagon(BaseShape):  # type: ignore[name-defined]
 
     _H = np.sqrt(3) / 2  # Half-height of unit hexagon
 
-    @property
-    def name(self) -> str:
-        return "Hexagon"
-
-    @property
-    def rotation_presets(self) -> list[tuple[str, int]]:
-        return [
-            ("Flat Bottom", 0),
-            ("Pointed Top", 30),
-            ("45°", 45),
-            ("60°", 60),
-            ("90°", 90),
-        ]
-
     def _point_inside_unit(self, px: float, py: float, rotation_deg: float) -> bool:
         """Check if point is inside unit hexagon (size=1) at given rotation."""
         # Rotate point in opposite direction

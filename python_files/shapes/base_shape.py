@@ -1,31 +1,22 @@
 """Base class for QR code shape generators."""
 
+from abc import ABC, abstractmethod
+
 import numpy as np
 from numpy.typing import NDArray
 
 
-class BaseShape:
+class BaseShape(ABC):
     """Abstract base class for shapes that can contain a QR code.
 
     Subclasses must implement:
-    - name: Human-readable name of the shape
-    - rotation_presets: List of (label, degrees) rotation presets
     - _point_inside_unit: Check if point is inside unit shape (size=1)
     """
 
-    @property
-    def name(self) -> str:
-        """Human-readable name of the shape."""
-        raise NotImplementedError
-
-    @property
-    def rotation_presets(self) -> list[tuple[str, int]]:
-        """List of (label, degrees) rotation presets for this shape."""
-        raise NotImplementedError
-
+    @abstractmethod
     def _point_inside_unit(self, px: float, py: float, rotation_deg: float) -> bool:
         """Check if point is inside unit shape (size=1) at given rotation."""
-        raise NotImplementedError
+        ...
 
     def _rotate_point(self, px: float, py: float, rotation_deg: float) -> tuple[float, float]:
         """Rotate a point by the given angle (inverse rotation for shape simulation)."""

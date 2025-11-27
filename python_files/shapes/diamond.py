@@ -34,19 +34,6 @@ class Diamond(BaseShape):  # type: ignore[name-defined]
     _CORNER_Y = -0.35  # Y of upper corners
     _BOTTOM_Y = 0.75  # Y of bottom point
 
-    @property
-    def name(self) -> str:
-        return "Diamond"
-
-    @property
-    def rotation_presets(self) -> List[Tuple[str, int]]:
-        return [
-            ("Point Down", 0),
-            ("Point Up", 180),
-            ("Point Right", 270),
-            ("Point Left", 90),
-        ]
-
     def _get_vertices(self) -> List[Tuple[float, float]]:
         """Get the 5 vertices of the diamond shape."""
         return [

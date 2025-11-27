@@ -26,19 +26,6 @@ class Triangle(BaseShape):  # type: ignore[name-defined]
         ]
     )
 
-    @property
-    def name(self) -> str:
-        return "Triangle"
-
-    @property
-    def rotation_presets(self) -> list[tuple[str, int]]:
-        return [
-            ("Point Up", 0),
-            ("Point Right", 90),
-            ("Point Down", 180),
-            ("Point Left", 270),
-        ]
-
     def _point_inside_unit(self, px: float, py: float, rotation_deg: float) -> bool:
         """Check if point is inside unit triangle (size=1) at given rotation."""
         # Rotate point in opposite direction

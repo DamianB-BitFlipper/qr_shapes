@@ -1,7 +1,6 @@
 """Square shape implementation for QR codes."""
 
 import math
-from typing import List, Tuple
 
 # At runtime in Pyodide, BaseShape is loaded first into global namespace
 # See: web/app/hooks/usePyodide.ts for load order
@@ -13,17 +12,6 @@ class Square(BaseShape):  # type: ignore[name-defined]
     At 0° rotation, the square has flat top/bottom edges.
     At 45° rotation, it appears as a diamond (rhombus).
     """
-
-    @property
-    def name(self) -> str:
-        return "Square"
-
-    @property
-    def rotation_presets(self) -> List[Tuple[str, int]]:
-        return [
-            ("Flat", 0),
-            ("Diamond", 45),
-        ]
 
     def bounding_box_factor(self, rotation_deg: float) -> float:
         """Get bounding box expansion factor for rotated square.
