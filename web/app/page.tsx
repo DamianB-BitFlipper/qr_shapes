@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { usePyodide } from "./hooks/usePyodide";
 
-type Shape = "circle" | "diamond" | "hexagon" | "triangle" | "heart";
+type Shape = "square" | "circle" | "diamond" | "hexagon" | "triangle" | "heart";
 
 interface ShapeConfig {
   label: string;
@@ -13,6 +13,22 @@ interface ShapeConfig {
 }
 
 const shapeConfigs: Record<Shape, ShapeConfig> = {
+  square: {
+    label: "Square",
+    getPoints: (size, cx, cy) => {
+      // Square centered at (cx, cy)
+      return [
+        `${cx - size},${cy - size}`,
+        `${cx + size},${cy - size}`,
+        `${cx + size},${cy + size}`,
+        `${cx - size},${cy + size}`,
+      ].join(" ");
+    },
+    presets: [
+      { label: "Flat", value: 0 },
+      { label: "Diamond", value: 45 },
+    ],
+  },
   circle: {
     label: "Circle",
     usePath: true,
@@ -121,7 +137,7 @@ const shapeConfigs: Record<Shape, ShapeConfig> = {
   },
 };
 
-const shapeList: Shape[] = ["circle", "diamond", "hexagon", "triangle", "heart"];
+const shapeList: Shape[] = ["square", "circle", "diamond", "hexagon", "triangle", "heart"];
 
 function ShapePreview({
   shape,
@@ -165,7 +181,7 @@ export default function Home() {
   const [genError, setGenError] = useState<string | null>(null);
   const [resolution, setResolution] = useState(1000);
   const [rotation, setRotation] = useState(0);
-  const [shape, setShape] = useState<Shape>("hexagon");
+  const [shape, setShape] = useState<Shape>("square");
   const [color, setColor] = useState("#000000");
 
   const handleGenerate = async () => {

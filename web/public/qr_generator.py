@@ -8,7 +8,7 @@ import qrcode
 from qrcode.constants import ERROR_CORRECT_H
 
 # Note: In Pyodide, all files are executed in the same global namespace.
-# BaseShape, Circle, Diamond, Hexagon, Triangle, and Heart are available
+# BaseShape, Square, Circle, Diamond, Hexagon, Triangle, and Heart are available
 # from previously loaded files.
 
 
@@ -17,6 +17,7 @@ ViewBox = Dict[str, float]
 
 # Available shapes
 SHAPES: Dict[str, "BaseShape"] = {  # type: ignore[name-defined]
+    "square": Square(),  # type: ignore[name-defined]
     "circle": Circle(),  # type: ignore[name-defined]
     "diamond": Diamond(),  # type: ignore[name-defined]
     "hexagon": Hexagon(),  # type: ignore[name-defined]
