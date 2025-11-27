@@ -25,8 +25,8 @@ export const metadata: Metadata = {
     "high resolution QR code",
     "QR code creator",
   ],
-  authors: [{ name: "ellamind", url: "https://elluminate.de" }],
-  creator: "ellamind",
+  authors: [{ name: "Damian Barabonkov", url: "https://damianb.com" }],
+  creator: "Damian Barabonkov",
   openGraph: {
     title: "Hexagon QR Generator | Free Online QR Code Maker",
     description:
