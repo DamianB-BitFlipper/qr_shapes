@@ -139,14 +139,18 @@ function buildCirclesFinderPatternPath(x: number, y: number): string {
 
 /**
  * Generate SVG path for a circular alignment pattern (small bullseye).
+ * centerX and centerY are the cell coordinates of the alignment pattern center.
+ * We add 0.5 to get the actual center point within the cell.
  */
-function buildCirclesAlignmentPatternPath(centerX: number, centerY: number): string {
+function buildCirclesAlignmentPatternPath(cellX: number, cellY: number): string {
+  const cx = cellX + 0.5;
+  const cy = cellY + 0.5;
   const outerR = 2.5;
   const middleR = 1.5;
   const innerR = 0.5;
   
   const circle = (r: number) => 
-    `M${centerX - r} ${centerY} A${r} ${r} 0 1 0 ${centerX + r} ${centerY} A${r} ${r} 0 1 0 ${centerX - r} ${centerY}`;
+    `M${cx - r} ${cy} A${r} ${r} 0 1 0 ${cx + r} ${cy} A${r} ${r} 0 1 0 ${cx - r} ${cy}`;
   
   return `${circle(outerR)} ${circle(middleR)} ${circle(innerR)}`;
 }
