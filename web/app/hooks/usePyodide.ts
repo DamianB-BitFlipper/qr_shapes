@@ -16,6 +16,9 @@ export interface QRData {
   };
   shapeSize: number;
   center: [number, number];
+  qrOrigin: [number, number];
+  qrSize: number;
+  version: number;
 }
 
 /**
@@ -149,6 +152,139 @@ function buildMergedPath(modules: [number, number][]): string {
 }
 
 /**
+ * Generate SVG path for a single finder pattern (7x7 position detection pattern).
+ * The pattern consists of:
+ * - Outer 7x7 black square
+ * - Inner 5x5 white square (1 module inset)
+ * - Center 3x3 black square (2 modules inset)
+ */
+function buildFinderPatternPath(x: number, y: number): string {
+  // Outer black square (7x7)
+  const outer = `M${x} ${y} h7 v7 h-7 Z`;
+  // Inner white square (5x5) - will be subtracted
+  const inner = `M${x + 1} ${y + 1} h5 v5 h-5 Z`;
+  // Center black square (3x3)
+  const center = `M${x + 2} ${y + 2} h3 v3 h-3 Z`;
+
+  return `${outer} ${inner} ${center}`;
+}
+
+/**
+ * Generate SVG path for a single alignment pattern (5x5).
+ * The pattern consists of:
+ * - Outer 5x5 black square
+ * - Inner 3x3 white square
+ * - Center 1x1 black square
+ */
+function buildAlignmentPatternPath(centerX: number, centerY: number): string {
+  const x = centerX - 2;
+  const y = centerY - 2;
+
+  // Outer black square (5x5)
+  const outer = `M${x} ${y} h5 v5 h-5 Z`;
+  // Inner white square (3x3)
+  const inner = `M${x + 1} ${y + 1} h3 v3 h-3 Z`;
+  // Center black square (1x1)
+  const center = `M${x + 2} ${y + 2} h1 v1 h-1 Z`;
+
+  return `${outer} ${inner} ${center}`;
+}
+
+/**
+ * Get alignment pattern center positions for a given QR version.
+ */
+function getAlignmentPatternPositions(version: number): number[] {
+  if (version < 2) return [];
+
+  const alignmentPositions: { [key: number]: number[] } = {
+    2: [6, 18],
+    3: [6, 22],
+    4: [6, 26],
+    5: [6, 30],
+    6: [6, 34],
+    7: [6, 22, 38],
+    8: [6, 24, 42],
+    9: [6, 26, 46],
+    10: [6, 28, 50],
+    11: [6, 30, 54],
+    12: [6, 32, 58],
+    13: [6, 34, 62],
+    14: [6, 26, 46, 66],
+    15: [6, 26, 48, 70],
+    16: [6, 26, 50, 74],
+    17: [6, 30, 54, 78],
+    18: [6, 30, 56, 82],
+    19: [6, 30, 58, 86],
+    20: [6, 34, 62, 90],
+    21: [6, 28, 50, 72, 94],
+    22: [6, 26, 50, 74, 98],
+    23: [6, 30, 54, 78, 102],
+    24: [6, 28, 54, 80, 106],
+    25: [6, 32, 58, 84, 110],
+    26: [6, 30, 58, 86, 114],
+    27: [6, 34, 62, 90, 118],
+    28: [6, 26, 50, 74, 98, 122],
+    29: [6, 30, 54, 78, 102, 126],
+    30: [6, 26, 52, 78, 104, 130],
+    31: [6, 30, 56, 82, 108, 134],
+    32: [6, 34, 60, 86, 112, 138],
+    33: [6, 30, 58, 86, 114, 142],
+    34: [6, 34, 62, 90, 118, 146],
+    35: [6, 30, 54, 78, 102, 126, 150],
+    36: [6, 24, 50, 76, 102, 128, 154],
+    37: [6, 28, 54, 80, 106, 132, 158],
+    38: [6, 32, 58, 84, 110, 136, 162],
+    39: [6, 26, 54, 82, 110, 138, 166],
+    40: [6, 30, 58, 86, 114, 142, 170],
+  };
+
+  return alignmentPositions[version] || [];
+}
+
+/**
+ * Build all finder and alignment pattern paths for the QR code.
+ */
+function buildPatternPaths(qrData: QRData): string {
+  const [originX, originY] = qrData.qrOrigin;
+  const size = qrData.qrSize;
+  const version = qrData.version;
+
+  const paths: string[] = [];
+
+  // Three finder patterns at corners
+  // Top-left
+  paths.push(buildFinderPatternPath(originX, originY));
+  // Top-right
+  paths.push(buildFinderPatternPath(originX + size - 7, originY));
+  // Bottom-left
+  paths.push(buildFinderPatternPath(originX, originY + size - 7));
+
+  // Alignment patterns (version 2+)
+  const alignmentPositions = getAlignmentPatternPositions(version);
+  if (alignmentPositions.length > 0) {
+    // Finder pattern centers (to skip)
+    const finderCenters = new Set([
+      `6,6`,
+      `6,${size - 7}`,
+      `${size - 7},6`,
+    ]);
+
+    for (const row of alignmentPositions) {
+      for (const col of alignmentPositions) {
+        // Skip if this would overlap with a finder pattern
+        if (finderCenters.has(`${col},${row}`)) continue;
+
+        paths.push(
+          buildAlignmentPatternPath(originX + col, originY + row)
+        );
+      }
+    }
+  }
+
+  return paths.join(" ");
+}
+
+/**
  * Build SVG string from QR data coordinates.
  * Adjacent modules are merged into unified shapes without visible borders.
  */
@@ -183,12 +319,16 @@ function buildSVG(
   const allModules = [...qrData.qrModules, ...qrData.noiseModules];
   const mergedPath = buildMergedPath(allModules);
 
+  // Build finder and alignment pattern paths
+  const patternPath = buildPatternPaths(qrData);
+
   return `<?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"
      width="${svgWidth}" height="${svgHeight}" viewBox="${vbStr}">
   ${patternDef}
   <rect x="${vb.min_x}" y="${vb.min_y}" width="${vb.width}" height="${vb.height}" fill="white"/>
   <path d="${mergedPath}" fill="${fillAttr}"/>
+  <path d="${patternPath}" fill="black" fill-rule="evenodd"/>
 </svg>`;
 }
 
@@ -297,6 +437,104 @@ function svgPathToPath2D(pathData: string, scale: number, offsetX: number, offse
 }
 
 /**
+ * Draw a finder pattern on a canvas context.
+ * @param ctx Canvas 2D context
+ * @param x Top-left x coordinate
+ * @param y Top-left y coordinate
+ * @param scale Scale factor (pixels per module)
+ */
+function drawFinderPattern(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  scale: number
+): void {
+  // Outer black square (7x7)
+  ctx.fillStyle = "black";
+  ctx.fillRect(x, y, 7 * scale, 7 * scale);
+
+  // Inner white square (5x5)
+  ctx.fillStyle = "white";
+  ctx.fillRect(x + scale, y + scale, 5 * scale, 5 * scale);
+
+  // Center black square (3x3)
+  ctx.fillStyle = "black";
+  ctx.fillRect(x + 2 * scale, y + 2 * scale, 3 * scale, 3 * scale);
+}
+
+/**
+ * Draw an alignment pattern on a canvas context.
+ * @param ctx Canvas 2D context
+ * @param centerX Center x coordinate
+ * @param centerY Center y coordinate
+ * @param scale Scale factor (pixels per module)
+ */
+function drawAlignmentPattern(
+  ctx: CanvasRenderingContext2D,
+  centerX: number,
+  centerY: number,
+  scale: number
+): void {
+  const x = centerX - 2 * scale;
+  const y = centerY - 2 * scale;
+
+  // Outer black square (5x5)
+  ctx.fillStyle = "black";
+  ctx.fillRect(x, y, 5 * scale, 5 * scale);
+
+  // Inner white square (3x3)
+  ctx.fillStyle = "white";
+  ctx.fillRect(x + scale, y + scale, 3 * scale, 3 * scale);
+
+  // Center black square (1x1)
+  ctx.fillStyle = "black";
+  ctx.fillRect(x + 2 * scale, y + 2 * scale, scale, scale);
+}
+
+/**
+ * Draw all finder and alignment patterns on a canvas.
+ */
+function drawPatterns(
+  ctx: CanvasRenderingContext2D,
+  qrData: QRData,
+  scale: number,
+  offsetX: number,
+  offsetY: number
+): void {
+  const [originX, originY] = qrData.qrOrigin;
+  const size = qrData.qrSize;
+  const version = qrData.version;
+
+  // Convert QR coordinates to canvas coordinates
+  const toCanvasX = (qrX: number) => (qrX - offsetX) * scale;
+  const toCanvasY = (qrY: number) => (qrY - offsetY) * scale;
+
+  // Three finder patterns at corners
+  drawFinderPattern(ctx, toCanvasX(originX), toCanvasY(originY), scale);
+  drawFinderPattern(ctx, toCanvasX(originX + size - 7), toCanvasY(originY), scale);
+  drawFinderPattern(ctx, toCanvasX(originX), toCanvasY(originY + size - 7), scale);
+
+  // Alignment patterns (version 2+)
+  const alignmentPositions = getAlignmentPatternPositions(version);
+  if (alignmentPositions.length > 0) {
+    const finderCenters = new Set([`6,6`, `6,${size - 7}`, `${size - 7},6`]);
+
+    for (const row of alignmentPositions) {
+      for (const col of alignmentPositions) {
+        if (finderCenters.has(`${col},${row}`)) continue;
+
+        drawAlignmentPattern(
+          ctx,
+          toCanvasX(originX + col),
+          toCanvasY(originY + row),
+          scale
+        );
+      }
+    }
+  }
+}
+
+/**
  * Render QR code with image showing only within the shape boundary.
  * The image is visible through the QR modules and noise modules,
  * with contrast-aware darkening/lightening for scanability.
@@ -381,6 +619,9 @@ function renderQRWithImage(
       }
       ctx.fillRect(0, 0, canvas.width, canvas.height);
       ctx.restore();
+      
+      // Draw finder and alignment patterns on top
+      drawPatterns(ctx, qrData, scale, vb.min_x, vb.min_y);
       
       const dataUrl = canvas.toDataURL("image/png");
       const base64 = dataUrl.replace(/^data:image\/png;base64,/, "");
