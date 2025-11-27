@@ -69,7 +69,7 @@ class BaseShape:
 
         # Binary search for max size
         lo, hi = 0.0, 2.0
-        eps = 1e-9
+        eps = 1e-3
         prev_mid = 0.0
 
         for _ in range(40):
@@ -79,14 +79,18 @@ class BaseShape:
                 break
             prev_mid = mid
 
-            # Check if all 4 corners are inside
-            corners = [
+            # Check corners first (more likely to be outside), then edge midpoints
+            points = [
                 (cx - mid, cy - mid),
                 (cx + mid, cy - mid),
                 (cx + mid, cy + mid),
                 (cx - mid, cy + mid),
+                (cx, cy - mid),
+                (cx + mid, cy),
+                (cx, cy + mid),
+                (cx - mid, cy),
             ]
-            if all(self._point_inside_unit(x, y, rotation_deg) for x, y in corners):
+            if all(self._point_inside_unit(x, y, rotation_deg) for x, y in points):
                 lo = mid
             else:
                 hi = mid
