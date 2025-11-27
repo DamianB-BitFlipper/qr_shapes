@@ -53,32 +53,32 @@ class BaseShape:
 
     def _max_square_at_center(self, cx: float, cy: float, rotation_deg: float) -> float:
         """Find the maximum half-size of a square centered at (cx, cy).
-        
+
         Uses binary search to find the largest square that fits.
-        
+
         Args:
             cx, cy: Center point in unit coordinates
             rotation_deg: Shape rotation in degrees
-            
+
         Returns:
             Maximum half-size (half of side length) that fits
         """
         # First check if center is even inside
         if not self._point_inside_unit(cx, cy, rotation_deg):
             return 0.0
-        
+
         # Binary search for max size
         lo, hi = 0.0, 2.0
         eps = 1e-9
         prev_mid = 0.0
-        
+
         for _ in range(40):
             mid = (lo + hi) / 2
-            
+
             if abs(mid - prev_mid) < eps:
                 break
             prev_mid = mid
-            
+
             # Check if all 4 corners are inside
             corners = [
                 (cx - mid, cy - mid),
@@ -90,12 +90,12 @@ class BaseShape:
                 lo = mid
             else:
                 hi = mid
-        
+
         return lo
 
     def _compute_loss(self, cx: float, cy: float, rotation_deg: float) -> float:
         """Compute loss (negative of max square size) for optimization.
-        
+
         We want to maximize square size, so we minimize negative size.
         """
         max_size = self._max_square_at_center(cx, cy, rotation_deg)
@@ -134,63 +134,65 @@ class BaseShape:
         self, qr_modules: int, rotation_deg: float = 0
     ) -> Tuple[float, float, float]:
         """Find the maximum inscribed axis-aligned square using gradient descent.
-        
+
         Args:
             qr_modules: Number of QR modules (determines scale)
             rotation_deg: Shape rotation in degrees
-            
+
         Returns:
             Tuple of (center_x, center_y, scale_factor)
         """
         # Start at centroid (0, 0 for unit shape)
         cx, cy = 0.0, 0.0
-        
+
         # Gradient descent
         step = 0.02
         min_step = 1e-6
         max_step = 0.1
         min_delta = 1e-10
         prev_loss = float("inf")
-        
+
         best_cx, best_cy = cx, cy
-        
+
         for _ in range(100):
             loss = self._compute_loss(cx, cy, rotation_deg)
-            
+
             # Adaptive step
             delta = prev_loss - loss
-            step, should_revert = self._compute_adaptive_step(
-                step, delta, min_delta, max_step
-            )
-            
+            step, should_revert = self._compute_adaptive_step(step, delta, min_delta, max_step)
+
             if should_revert:
                 cx, cy = best_cx, best_cy
             elif delta > min_delta:
                 # Made progress, update best
                 best_cx, best_cy = cx, cy
-            
+
             if step < min_step:
                 break
-            
+
             prev_loss = loss
-            
+
             # Numerical gradient
             eps = 0.001
-            grad_x = (self._compute_loss(cx + eps, cy, rotation_deg) - 
-                      self._compute_loss(cx - eps, cy, rotation_deg)) / (2 * eps)
-            grad_y = (self._compute_loss(cx, cy + eps, rotation_deg) - 
-                      self._compute_loss(cx, cy - eps, rotation_deg)) / (2 * eps)
-            
+            grad_x = (
+                self._compute_loss(cx + eps, cy, rotation_deg)
+                - self._compute_loss(cx - eps, cy, rotation_deg)
+            ) / (2 * eps)
+            grad_y = (
+                self._compute_loss(cx, cy + eps, rotation_deg)
+                - self._compute_loss(cx, cy - eps, rotation_deg)
+            ) / (2 * eps)
+
             # Update
             new_cx = cx - step * grad_x
             new_cy = cy - step * grad_y
-            
+
             # Only move if still inside shape
             if self._point_inside_unit(new_cx, new_cy, rotation_deg):
                 cx, cy = new_cx, new_cy
-        
+
         # best_size is half the side length in unit coordinates
         best_size = self._max_square_at_center(best_cx, best_cy, rotation_deg)
         scale = qr_modules / (2 * best_size)
-        
+
         return (best_cx, best_cy, scale)

@@ -8,3 +8,27 @@ dependencies = [
     "pillow>=12.0.0",
     "qrcode>=8.2",
 ]
+
+[dependency-groups]
+dev = [
+    "pre-commit>=4.0.0",
+    "pyright>=1.1.0",
+    "ruff>=0.8.0",
+]
+
+[tool.ruff]
+target-version = "py312"
+src = ["python_files"]
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "W"]
+ignore = ["F821"]  # Undefined names - BaseShape/Hexagon/Triangle loaded at runtime in Pyodide
+
+[tool.pyright]
+include = ["python_files"]
+pythonVersion = "3.12"
+typeCheckingMode = "basic"
+reportMissingImports = false
+reportUndefinedVariable = false  # BaseShape loaded at runtime in Pyodide
+reportUnsupportedDunderAll = false  # __all__ exports runtime-loaded names

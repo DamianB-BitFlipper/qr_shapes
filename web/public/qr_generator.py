@@ -22,7 +22,9 @@ SHAPES: Dict[str, "BaseShape"] = {  # type: ignore[name-defined]
 
 
 def _generate_svg_data(
-    url: str, shape: "BaseShape", rotation: int = 0  # type: ignore[name-defined]
+    url: str,
+    shape: "BaseShape",
+    rotation: int = 0,  # type: ignore[name-defined]
 ) -> Tuple[str, ViewBox]:
     """Generate QR code SVG data inside a shape.
 
@@ -83,9 +85,7 @@ def _generate_svg_data(
             module_cx = module_x + 0.5
             module_cy = module_y + 0.5
 
-            if not shape.point_inside(
-                module_cx, module_cy, cx, cy, shape_size, rotation
-            ):
+            if not shape.point_inside(module_cx, module_cy, cx, cy, shape_size, rotation):
                 continue
 
             if (
@@ -96,9 +96,7 @@ def _generate_svg_data(
 
             random.seed(module_x * 10000 + module_y)
             if random.random() > 0.5:
-                rects.append(
-                    f'<rect x="{module_x}" y="{module_y}" width="1" height="1"/>'
-                )
+                rects.append(f'<rect x="{module_x}" y="{module_y}" width="1" height="1"/>')
 
     # Add QR code modules
     matrix = qr.modules
@@ -133,13 +131,19 @@ def _build_svg(rects_svg: str, viewbox: ViewBox, resolution: int) -> str:
     svg_width = resolution
     svg_height = int(resolution * viewbox["height"] / viewbox["width"])
 
-    return f'''<?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" width="{svg_width}" height="{svg_height}" viewBox="{viewbox["min_x"]} {viewbox["min_y"]} {viewbox["width"]} {viewbox["height"]}">
-  <rect x="{viewbox["min_x"]}" y="{viewbox["min_y"]}" width="{viewbox["width"]}" height="{viewbox["height"]}" fill="white"/>
+    vb_min_x = viewbox["min_x"]
+    vb_min_y = viewbox["min_y"]
+    vb_w = viewbox["width"]
+    vb_h = viewbox["height"]
+    vb = f"{vb_min_x} {vb_min_y} {vb_w} {vb_h}"
+
+    return f"""<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="{svg_width}" height="{svg_height}" viewBox="{vb}">
+  <rect x="{vb_min_x}" y="{vb_min_y}" width="{vb_w}" height="{vb_h}" fill="white"/>
   <g fill="black">
     {rects_svg}
   </g>
-</svg>'''
+</svg>"""
 
 
 # Public API functions (called from frontend)

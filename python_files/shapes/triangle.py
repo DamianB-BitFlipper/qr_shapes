@@ -45,7 +45,9 @@ class Triangle(BaseShape):  # type: ignore[name-defined]
 
         v0, v1, v2 = self._UNIT_VERTICES
 
-        def sign(p1: Tuple[float, float], p2: Tuple[float, float], p3: Tuple[float, float]) -> float:
+        def sign(
+            p1: Tuple[float, float], p2: Tuple[float, float], p3: Tuple[float, float]
+        ) -> float:
             return (p1[0] - p3[0]) * (p2[1] - p3[1]) - (p2[0] - p3[0]) * (p1[1] - p3[1])
 
         p = (px, py)

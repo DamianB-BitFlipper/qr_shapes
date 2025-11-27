@@ -1,0 +1,32 @@
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.8.6
+    hooks:
+      - id: ruff
+        args: [--fix]
+        files: ^python_files/
+      - id: ruff-format
+        files: ^python_files/
+
+  - repo: local
+    hooks:
+      - id: pyright
+        name: pyright
+        entry: uv run pyright
+        language: system
+        types: [python]
+        files: ^python_files/
+
+      - id: eslint
+        name: eslint
+        entry: bash -c 'cd web && pnpm lint'
+        language: system
+        files: ^web/.*\.(ts|tsx|js|jsx)$
+        pass_filenames: false
+
+      - id: typescript
+        name: typescript
+        entry: bash -c 'cd web && pnpm typecheck'
+        language: system
+        files: ^web/.*\.(ts|tsx)$
+        pass_filenames: false

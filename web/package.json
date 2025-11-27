@@ -8,7 +8,8 @@
     "dev": "pnpm copy-python && concurrently \"pnpm watch-python\" \"next dev --port 5600\"",
     "build": "pnpm copy-python && next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "next": "16.0.4",
