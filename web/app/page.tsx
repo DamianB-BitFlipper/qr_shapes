@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef } from "react";
-import { usePyodide } from "./hooks/usePyodide";
+import { usePyodide, ModuleStyle } from "./hooks/usePyodide";
 
 type Shape = "square" | "circle" | "diamond" | "hexagon" | "triangle" | "heart";
 type FillMode = "color" | "image";
@@ -186,6 +186,7 @@ export default function Home() {
   const [color, setColor] = useState("#000000");
   const [fillMode, setFillMode] = useState<FillMode>("color");
   const [fillImage, setFillImage] = useState<string | null>(null);
+  const [moduleStyle, setModuleStyle] = useState<ModuleStyle>("blocks");
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -229,7 +230,7 @@ export default function Home() {
 
     try {
       const fill = fillMode === "image" && fillImage ? fillImage : color;
-      const base64 = await generatePNG(url, shape, resolution, rotation, fill);
+      const base64 = await generatePNG(url, shape, resolution, rotation, fill, moduleStyle);
       setQrImage(`data:image/png;base64,${base64}`);
     } catch (err) {
       setGenError(err instanceof Error ? err.message : "Failed to generate QR");
@@ -243,7 +244,7 @@ export default function Home() {
 
     try {
       const fill = fillMode === "image" && fillImage ? fillImage : color;
-      const base64 = await generatePNG(url, shape, resolution, rotation, fill);
+      const base64 = await generatePNG(url, shape, resolution, rotation, fill, moduleStyle);
       const link = document.createElement("a");
       link.href = `data:image/png;base64,${base64}`;
       link.download = `qr-${shape}.png`;
@@ -258,7 +259,7 @@ export default function Home() {
 
     try {
       const fill = fillMode === "image" && fillImage ? fillImage : color;
-      const svg = await generateSVG(url, shape, resolution, rotation, fill);
+      const svg = await generateSVG(url, shape, resolution, rotation, fill, moduleStyle);
       const blob = new Blob([svg], { type: "image/svg+xml" });
       const link = document.createElement("a");
       link.href = URL.createObjectURL(blob);
@@ -356,6 +357,47 @@ export default function Home() {
                       </svg>
                     </button>
                   ))}
+                </div>
+              </div>
+
+              {/* Module Style Selection */}
+              <div className="flex flex-col gap-3">
+                <label className="text-sm font-medium text-zinc-700">
+                  Module Style
+                </label>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setModuleStyle("blocks")}
+                    className={`flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded-lg border-2 transition ${
+                      moduleStyle === "blocks"
+                        ? "border-zinc-900 bg-zinc-50"
+                        : "border-zinc-200 hover:border-zinc-400"
+                    }`}
+                  >
+                    <svg viewBox="0 0 24 24" className="w-5 h-5">
+                      <rect x="2" y="2" width="8" height="8" fill={moduleStyle === "blocks" ? color : "#a1a1aa"} />
+                      <rect x="14" y="2" width="8" height="8" fill={moduleStyle === "blocks" ? color : "#a1a1aa"} />
+                      <rect x="2" y="14" width="8" height="8" fill={moduleStyle === "blocks" ? color : "#a1a1aa"} />
+                      <rect x="14" y="14" width="8" height="8" fill={moduleStyle === "blocks" ? color : "#a1a1aa"} />
+                    </svg>
+                    <span className="text-sm text-zinc-700">Blocks</span>
+                  </button>
+                  <button
+                    onClick={() => setModuleStyle("circles")}
+                    className={`flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded-lg border-2 transition ${
+                      moduleStyle === "circles"
+                        ? "border-zinc-900 bg-zinc-50"
+                        : "border-zinc-200 hover:border-zinc-400"
+                    }`}
+                  >
+                    <svg viewBox="0 0 24 24" className="w-5 h-5">
+                      <circle cx="6" cy="6" r="4" fill={moduleStyle === "circles" ? color : "#a1a1aa"} />
+                      <circle cx="18" cy="6" r="4" fill={moduleStyle === "circles" ? color : "#a1a1aa"} />
+                      <circle cx="6" cy="18" r="4" fill={moduleStyle === "circles" ? color : "#a1a1aa"} />
+                      <circle cx="18" cy="18" r="4" fill={moduleStyle === "circles" ? color : "#a1a1aa"} />
+                    </svg>
+                    <span className="text-sm text-zinc-700">Circles</span>
+                  </button>
                 </div>
               </div>
 

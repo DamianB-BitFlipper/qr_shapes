@@ -5,6 +5,8 @@ import { useState, useEffect, useCallback, useRef } from "react";
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type PyodideInterface = any;
 
+export type ModuleStyle = "blocks" | "circles";
+
 export interface QRData {
   qrModules: [number, number][];
   noiseModules: [number, number][];
@@ -152,6 +154,101 @@ function buildMergedPath(modules: [number, number][]): string {
 }
 
 /**
+ * Build a path of individual circles for each module.
+ * Each module is rendered as a simple circle - no merging to avoid overlap issues.
+ */
+function buildCircularMergedPath(modules: [number, number][]): string {
+  if (modules.length === 0) return "";
+
+  const paths: string[] = [];
+  const radius = 0.45; // Slightly smaller than 0.5 to leave small gaps
+
+  // Draw a circle for each module
+  for (const [x, y] of modules) {
+    const cx = x + 0.5;
+    const cy = y + 0.5;
+    // Draw circle using two arcs
+    paths.push(
+      `M${cx - radius} ${cy} ` +
+      `a${radius} ${radius} 0 1 0 ${radius * 2} 0 ` +
+      `a${radius} ${radius} 0 1 0 ${-radius * 2} 0`
+    );
+  }
+
+  return paths.join(" ");
+}
+
+/**
+ * Generate SVG path for a circular finder pattern (bullseye).
+ * Three concentric circles: outer black, middle white, inner black.
+ */
+function buildCircularFinderPatternPath(x: number, y: number): string {
+  // Center of the 7x7 finder pattern
+  const cx = x + 3.5;
+  const cy = y + 3.5;
+  
+  // Radii for the three circles (scaled to fit in 7x7 area)
+  const outerR = 3.5;
+  const middleR = 2.5;
+  const innerR = 1.5;
+  
+  // Draw circles using two arcs each
+  const circle = (r: number) => 
+    `M${cx - r} ${cy} A${r} ${r} 0 1 0 ${cx + r} ${cy} A${r} ${r} 0 1 0 ${cx - r} ${cy}`;
+  
+  return `${circle(outerR)} ${circle(middleR)} ${circle(innerR)}`;
+}
+
+/**
+ * Generate SVG path for a circular alignment pattern (small bullseye).
+ */
+function buildCircularAlignmentPatternPath(centerX: number, centerY: number): string {
+  const outerR = 2.5;
+  const middleR = 1.5;
+  const innerR = 0.5;
+  
+  const circle = (r: number) => 
+    `M${centerX - r} ${centerY} A${r} ${r} 0 1 0 ${centerX + r} ${centerY} A${r} ${r} 0 1 0 ${centerX - r} ${centerY}`;
+  
+  return `${circle(outerR)} ${circle(middleR)} ${circle(innerR)}`;
+}
+
+/**
+ * Build all finder and alignment pattern paths for the QR code (circular style).
+ */
+function buildCircularPatternPaths(qrData: QRData): string {
+  const [originX, originY] = qrData.qrOrigin;
+  const size = qrData.qrSize;
+  const version = qrData.version;
+
+  const paths: string[] = [];
+
+  // Three finder patterns at corners
+  paths.push(buildCircularFinderPatternPath(originX, originY));
+  paths.push(buildCircularFinderPatternPath(originX + size - 7, originY));
+  paths.push(buildCircularFinderPatternPath(originX, originY + size - 7));
+
+  // Alignment patterns (version 2+)
+  const alignmentPositions = getAlignmentPatternPositions(version);
+  if (alignmentPositions.length > 0) {
+    const finderCenters = new Set([
+      `6,6`,
+      `6,${size - 7}`,
+      `${size - 7},6`,
+    ]);
+
+    for (const row of alignmentPositions) {
+      for (const col of alignmentPositions) {
+        if (finderCenters.has(`${col},${row}`)) continue;
+        paths.push(buildCircularAlignmentPatternPath(originX + col, originY + row));
+      }
+    }
+  }
+
+  return paths.join(" ");
+}
+
+/**
  * Generate SVG path for a single finder pattern (7x7 position detection pattern).
  * The pattern consists of:
  * - Outer 7x7 black square
@@ -291,7 +388,8 @@ function buildPatternPaths(qrData: QRData): string {
 function buildSVG(
   qrData: QRData,
   resolution: number,
-  fill: string
+  fill: string,
+  style: ModuleStyle = "blocks"
 ): string {
   const vb = qrData.viewbox;
   const svgWidth = resolution;
@@ -315,12 +413,16 @@ function buildSVG(
     fillAttr = "url(#imgPattern)";
   }
 
-  // Build merged path from all modules
+  // Build merged path from all modules based on style
   const allModules = [...qrData.qrModules, ...qrData.noiseModules];
-  const mergedPath = buildMergedPath(allModules);
+  const mergedPath = style === "circles" 
+    ? buildCircularMergedPath(allModules)
+    : buildMergedPath(allModules);
 
-  // Build finder and alignment pattern paths
-  const patternPath = buildPatternPaths(qrData);
+  // Build finder and alignment pattern paths based on style
+  const patternPath = style === "circles"
+    ? buildCircularPatternPaths(qrData)
+    : buildPatternPaths(qrData);
 
   return `<?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"
@@ -437,6 +539,107 @@ function svgPathToPath2D(pathData: string, scale: number, offsetX: number, offse
 }
 
 /**
+ * Draw a circular finder pattern (bullseye) on a canvas context.
+ */
+function drawCircularFinderPattern(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  scale: number
+): void {
+  const cx = x + 3.5 * scale;
+  const cy = y + 3.5 * scale;
+  
+  // Outer black circle
+  ctx.fillStyle = "black";
+  ctx.beginPath();
+  ctx.arc(cx, cy, 3.5 * scale, 0, Math.PI * 2);
+  ctx.fill();
+  
+  // Middle white circle
+  ctx.fillStyle = "white";
+  ctx.beginPath();
+  ctx.arc(cx, cy, 2.5 * scale, 0, Math.PI * 2);
+  ctx.fill();
+  
+  // Inner black circle
+  ctx.fillStyle = "black";
+  ctx.beginPath();
+  ctx.arc(cx, cy, 1.5 * scale, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+/**
+ * Draw a circular alignment pattern (small bullseye) on a canvas context.
+ */
+function drawCircularAlignmentPattern(
+  ctx: CanvasRenderingContext2D,
+  centerX: number,
+  centerY: number,
+  scale: number
+): void {
+  // Outer black circle
+  ctx.fillStyle = "black";
+  ctx.beginPath();
+  ctx.arc(centerX, centerY, 2.5 * scale, 0, Math.PI * 2);
+  ctx.fill();
+  
+  // Middle white circle
+  ctx.fillStyle = "white";
+  ctx.beginPath();
+  ctx.arc(centerX, centerY, 1.5 * scale, 0, Math.PI * 2);
+  ctx.fill();
+  
+  // Inner black circle
+  ctx.fillStyle = "black";
+  ctx.beginPath();
+  ctx.arc(centerX, centerY, 0.5 * scale, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+/**
+ * Draw all finder and alignment patterns on a canvas (circular style).
+ */
+function drawCircularPatterns(
+  ctx: CanvasRenderingContext2D,
+  qrData: QRData,
+  scale: number,
+  offsetX: number,
+  offsetY: number
+): void {
+  const [originX, originY] = qrData.qrOrigin;
+  const size = qrData.qrSize;
+  const version = qrData.version;
+
+  const toCanvasX = (qrX: number) => (qrX - offsetX) * scale;
+  const toCanvasY = (qrY: number) => (qrY - offsetY) * scale;
+
+  // Three finder patterns at corners
+  drawCircularFinderPattern(ctx, toCanvasX(originX), toCanvasY(originY), scale);
+  drawCircularFinderPattern(ctx, toCanvasX(originX + size - 7), toCanvasY(originY), scale);
+  drawCircularFinderPattern(ctx, toCanvasX(originX), toCanvasY(originY + size - 7), scale);
+
+  // Alignment patterns (version 2+)
+  const alignmentPositions = getAlignmentPatternPositions(version);
+  if (alignmentPositions.length > 0) {
+    const finderCenters = new Set([`6,6`, `6,${size - 7}`, `${size - 7},6`]);
+
+    for (const row of alignmentPositions) {
+      for (const col of alignmentPositions) {
+        if (finderCenters.has(`${col},${row}`)) continue;
+
+        drawCircularAlignmentPattern(
+          ctx,
+          toCanvasX(originX + col),
+          toCanvasY(originY + row),
+          scale
+        );
+      }
+    }
+  }
+}
+
+/**
  * Draw a finder pattern on a canvas context.
  * @param ctx Canvas 2D context
  * @param x Top-left x coordinate
@@ -543,7 +746,8 @@ function drawPatterns(
 function renderQRWithImage(
   qrData: QRData,
   imageDataUrl: string,
-  resolution: number
+  resolution: number,
+  style: ModuleStyle = "blocks"
 ): Promise<string> {
   return new Promise((resolve, reject) => {
     const img = new Image();
@@ -582,9 +786,11 @@ function renderQRWithImage(
       ctx.fillStyle = "white";
       ctx.fillRect(0, 0, canvas.width, canvas.height);
       
-      // Build merged path from all modules
+      // Build merged path from all modules based on style
       const allModules = [...qrData.qrModules, ...qrData.noiseModules];
-      const mergedPathData = buildMergedPath(allModules);
+      const mergedPathData = style === "circles"
+        ? buildCircularMergedPath(allModules)
+        : buildMergedPath(allModules);
       
       // Convert to Path2D for clipping
       const clipPath = svgPathToPath2D(mergedPathData, scale, vb.min_x, vb.min_y);
@@ -620,8 +826,12 @@ function renderQRWithImage(
       ctx.fillRect(0, 0, canvas.width, canvas.height);
       ctx.restore();
       
-      // Draw finder and alignment patterns on top
-      drawPatterns(ctx, qrData, scale, vb.min_x, vb.min_y);
+      // Draw finder and alignment patterns on top based on style
+      if (style === "circles") {
+        drawCircularPatterns(ctx, qrData, scale, vb.min_x, vb.min_y);
+      } else {
+        drawPatterns(ctx, qrData, scale, vb.min_x, vb.min_y);
+      }
       
       const dataUrl = canvas.toDataURL("image/png");
       const base64 = dataUrl.replace(/^data:image\/png;base64,/, "");
@@ -722,10 +932,11 @@ export function usePyodide() {
       shape: string,
       resolution: number,
       rotation: number,
-      fill: string
+      fill: string,
+      style: ModuleStyle = "blocks"
     ): Promise<string> => {
       const qrData = await generateQRData(url, shape, rotation);
-      return buildSVG(qrData, resolution, fill);
+      return buildSVG(qrData, resolution, fill, style);
     },
     [generateQRData]
   );
@@ -736,17 +947,18 @@ export function usePyodide() {
       shape: string,
       resolution: number,
       rotation: number,
-      fill: string
+      fill: string,
+      style: ModuleStyle = "blocks"
     ): Promise<string> => {
       const qrData = await generateQRData(url, shape, rotation);
       const isImage = fill.startsWith("data:image");
       
       if (isImage) {
         // Use canvas-based rendering with contrast-aware modules
-        return renderQRWithImage(qrData, fill, resolution);
+        return renderQRWithImage(qrData, fill, resolution, style);
       } else {
         // Generate SVG and convert to PNG
-        const svg = buildSVG(qrData, resolution, fill);
+        const svg = buildSVG(qrData, resolution, fill, style);
         return svgToPngBase64(svg);
       }
     },
