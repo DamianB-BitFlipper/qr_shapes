@@ -3,12 +3,13 @@
 import { useState } from "react";
 import { usePyodide } from "./hooks/usePyodide";
 
-type Shape = "hexagon" | "triangle";
+type Shape = "hexagon" | "triangle" | "heart";
 
 interface ShapeConfig {
   label: string;
   getPoints: (size: number, cx: number, cy: number) => string;
   presets: { label: string; value: number }[];
+  usePath?: boolean; // If true, getPoints returns a path 'd' attribute instead of polygon points
 }
 
 const shapeConfigs: Record<Shape, ShapeConfig> = {
@@ -50,9 +51,38 @@ const shapeConfigs: Record<Shape, ShapeConfig> = {
       { label: "Point Left", value: 270 },
     ],
   },
+  heart: {
+    label: "Heart",
+    usePath: true,
+    getPoints: (size, cx, cy) => {
+      // Heart curve: x = 16sin³(t), y = 13cos(t) - 5cos(2t) - 2cos(3t) - cos(4t)
+      // Scaled to fit in size, with point up at 0° rotation
+      const scale = size / 17;
+      const points = [];
+      const steps = 60;
+      for (let i = 0; i <= steps; i++) {
+        const t = (i / steps) * 2 * Math.PI;
+        const sinT = Math.sin(t);
+        const cosT = Math.cos(t);
+        const x = 16 * Math.pow(sinT, 3);
+        // Negative y to flip heart so it points up
+        const y = -(13 * cosT - 5 * Math.cos(2 * t) - 2 * Math.cos(3 * t) - Math.cos(4 * t));
+        const px = cx + x * scale;
+        const py = cy + y * scale;
+        points.push(i === 0 ? `M ${px} ${py}` : `L ${px} ${py}`);
+      }
+      return points.join(" ") + " Z";
+    },
+    presets: [
+      { label: "Point Up", value: 0 },
+      { label: "Point Right", value: 90 },
+      { label: "Point Down", value: 180 },
+      { label: "Point Left", value: 270 },
+    ],
+  },
 };
 
-const shapeList: Shape[] = ["hexagon", "triangle"];
+const shapeList: Shape[] = ["hexagon", "triangle", "heart"];
 
 function ShapePreview({
   shape,
@@ -66,15 +96,24 @@ function ShapePreview({
   const size = 20;
   const cx = 20;
   const cy = 20;
-  const points = shapeConfigs[shape].getPoints(size, cx, cy);
+  const config = shapeConfigs[shape];
+  const points = config.getPoints(size, cx, cy);
 
   return (
     <svg width="40" height="40" viewBox="0 0 40 40">
-      <polygon
-        points={points}
-        fill={color}
-        transform={`rotate(${rotation}, ${cx}, ${cy})`}
-      />
+      {config.usePath ? (
+        <path
+          d={points}
+          fill={color}
+          transform={`rotate(${rotation}, ${cx}, ${cy})`}
+        />
+      ) : (
+        <polygon
+          points={points}
+          fill={color}
+          transform={`rotate(${rotation}, ${cx}, ${cy})`}
+        />
+      )}
     </svg>
   );
 }
@@ -223,10 +262,17 @@ export default function Home() {
                       title={shapeConfigs[s].label}
                     >
                       <svg viewBox="0 0 40 40" className="w-full h-full max-w-[32px] max-h-[32px]">
-                        <polygon
-                          points={shapeConfigs[s].getPoints(18, 20, 20)}
-                          fill={shape === s ? color : "#a1a1aa"}
-                        />
+                        {shapeConfigs[s].usePath ? (
+                          <path
+                            d={shapeConfigs[s].getPoints(18, 20, 20)}
+                            fill={shape === s ? color : "#a1a1aa"}
+                          />
+                        ) : (
+                          <polygon
+                            points={shapeConfigs[s].getPoints(18, 20, 20)}
+                            fill={shape === s ? color : "#a1a1aa"}
+                          />
+                        )}
                       </svg>
                     </button>
                   ))}

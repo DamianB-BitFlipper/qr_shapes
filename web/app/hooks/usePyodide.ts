@@ -84,6 +84,7 @@ export function usePyodide() {
           "shapes/base_shape.py",
           "shapes/hexagon.py",
           "shapes/triangle.py",
+          "shapes/heart.py",
           "qr_generator.py",
         ];
         

@@ -8,7 +8,7 @@ import qrcode
 from qrcode.constants import ERROR_CORRECT_H
 
 # Note: In Pyodide, all files are executed in the same global namespace.
-# BaseShape, Hexagon, and Triangle are available from previously loaded files.
+# BaseShape, Hexagon, Triangle, and Heart are available from previously loaded files.
 
 
 # Type alias for viewbox dictionary
@@ -18,6 +18,7 @@ ViewBox = Dict[str, float]
 SHAPES: Dict[str, "BaseShape"] = {  # type: ignore[name-defined]
     "hexagon": Hexagon(),  # type: ignore[name-defined]
     "triangle": Triangle(),  # type: ignore[name-defined]
+    "heart": Heart(),  # type: ignore[name-defined]
 }
 
 
