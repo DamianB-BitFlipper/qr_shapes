@@ -170,112 +170,125 @@ function roundedRectPath(x: number, y: number, w: number, h: number, r: number):
 
 /**
  * Build a merged path with rounded corners for connected modules.
- * Adjacent modules are joined into lines/shapes with rounded ends and corners.
+ * Uses BFS to find connected components, then draws each component
+ * by drawing connectors between adjacent cells.
  */
 export function buildLinesPath(modules: [number, number][]): string {
   if (modules.length === 0) return "";
 
+  const radius = 0.45;
+  const paths: string[] = [];
+
+  // Create a set for O(1) lookup and track unvisited points
   const moduleSet = new Set<string>();
+  const unvisited = new Set<string>();
   for (const [x, y] of modules) {
-    moduleSet.add(`${x},${y}`);
+    const key = `${x},${y}`;
+    moduleSet.add(key);
+    unvisited.add(key);
   }
 
   const hasModule = (x: number, y: number): boolean => moduleSet.has(`${x},${y}`);
 
-  const radius = 0.45;
-  const paths: string[] = [];
-  const visited = new Set<string>();
-
-  // Find horizontal runs first
-  for (const [x, y] of modules) {
-    const key = `${x},${y}`;
-    if (visited.has(key)) continue;
-
-    // Check if this is part of a horizontal run
-    let runStartX = x;
-    let runEndX = x;
-
-    // Extend left
-    while (hasModule(runStartX - 1, y) && !visited.has(`${runStartX - 1},${y}`)) {
-      runStartX--;
-    }
-    // Extend right
-    while (hasModule(runEndX + 1, y) && !visited.has(`${runEndX + 1},${y}`)) {
-      runEndX++;
-    }
-
-    const runLength = runEndX - runStartX + 1;
-
-    // Only create horizontal run if length > 1
-    if (runLength > 1) {
-      // Mark all in this run as visited
-      for (let rx = runStartX; rx <= runEndX; rx++) {
-        visited.add(`${rx},${y}`);
+  const getNeighbors = (x: number, y: number): [number, number][] => {
+    const neighbors: [number, number][] = [];
+    const directions: [number, number][] = [[0, -1], [1, 0], [0, 1], [-1, 0]]; // up, right, down, left
+    for (const [dx, dy] of directions) {
+      const nx = x + dx;
+      const ny = y + dy;
+      if (moduleSet.has(`${nx},${ny}`)) {
+        neighbors.push([nx, ny]);
       }
-      
-      // Draw rounded pill for horizontal run
-      const margin = 0.5 - radius;
-      paths.push(roundedRectPath(
-        runStartX + margin,
-        y + margin,
-        runLength - 2 * margin,
-        1 - 2 * margin,
-        radius
-      ));
     }
+    return neighbors;
+  };
+
+  // Find all connected components using BFS
+  const connectedComponents: [number, number][][] = [];
+
+  while (unvisited.size > 0) {
+    const startKey = unvisited.values().next().value as string;
+    const [startX, startY] = startKey.split(",").map(Number);
+
+    const component: [number, number][] = [];
+    const queue: [number, number][] = [[startX, startY]];
+    unvisited.delete(startKey);
+
+    while (queue.length > 0) {
+      const [x, y] = queue.shift()!;
+      component.push([x, y]);
+
+      for (const [nx, ny] of getNeighbors(x, y)) {
+        const neighborKey = `${nx},${ny}`;
+        if (unvisited.has(neighborKey)) {
+          unvisited.delete(neighborKey);
+          queue.push([nx, ny]);
+        }
+      }
+    }
+
+    connectedComponents.push(component);
   }
 
-  // Find vertical runs for remaining unvisited modules
-  for (const [x, y] of modules) {
-    const key = `${x},${y}`;
-    if (visited.has(key)) continue;
+  // Draw each connected component
+  for (const component of connectedComponents) {
+    const componentSet = new Set(component.map(([x, y]) => `${x},${y}`));
+    
+    // Track which edges have been drawn
+    const drawnEdges = new Set<string>();
+    const edgeKey = (x1: number, y1: number, x2: number, y2: number) => {
+      // Normalize edge key so (a,b)-(c,d) and (c,d)-(a,b) are the same
+      if (x1 < x2 || (x1 === x2 && y1 < y2)) {
+        return `${x1},${y1}-${x2},${y2}`;
+      }
+      return `${x2},${y2}-${x1},${y1}`;
+    };
 
-    // Check if this is part of a vertical run
-    let runStartY = y;
-    let runEndY = y;
-
-    // Extend up
-    while (hasModule(x, runStartY - 1) && !visited.has(`${x},${runStartY - 1}`)) {
-      runStartY--;
+    // Draw a circle at each cell center (clockwise arcs to match rectangle winding)
+    for (const [x, y] of component) {
+      const cx = x + 0.5;
+      const cy = y + 0.5;
+      paths.push(
+        `M${cx - radius} ${cy} ` +
+        `a${radius} ${radius} 0 1 1 ${radius * 2} 0 ` +
+        `a${radius} ${radius} 0 1 1 ${-radius * 2} 0`
+      );
     }
-    // Extend down
-    while (hasModule(x, runEndY + 1) && !visited.has(`${x},${runEndY + 1}`)) {
-      runEndY++;
-    }
 
-    const runLength = runEndY - runStartY + 1;
-
-    if (runLength > 1) {
-      // Mark all in this run as visited
-      for (let ry = runStartY; ry <= runEndY; ry++) {
-        visited.add(`${x},${ry}`);
+    // Draw connectors between adjacent cells
+    for (const [x, y] of component) {
+      // Check right neighbor
+      if (hasModule(x + 1, y)) {
+        const ek = edgeKey(x, y, x + 1, y);
+        if (!drawnEdges.has(ek)) {
+          drawnEdges.add(ek);
+          // Horizontal connector - a rectangle between the two circles
+          const connectorWidth = 1 - 2 * (0.5 - radius); // overlap with circles
+          const connectorHeight = radius * 2;
+          paths.push(
+            `M${x + 0.5} ${y + 0.5 - radius} ` +
+            `L${x + 1.5} ${y + 0.5 - radius} ` +
+            `L${x + 1.5} ${y + 0.5 + radius} ` +
+            `L${x + 0.5} ${y + 0.5 + radius} Z`
+          );
+        }
       }
       
-      // Draw rounded pill for vertical run
-      const margin = 0.5 - radius;
-      paths.push(roundedRectPath(
-        x + margin,
-        runStartY + margin,
-        1 - 2 * margin,
-        runLength - 2 * margin,
-        radius
-      ));
+      // Check bottom neighbor
+      if (hasModule(x, y + 1)) {
+        const ek = edgeKey(x, y, x, y + 1);
+        if (!drawnEdges.has(ek)) {
+          drawnEdges.add(ek);
+          // Vertical connector - a rectangle between the two circles
+          paths.push(
+            `M${x + 0.5 - radius} ${y + 0.5} ` +
+            `L${x + 0.5 + radius} ${y + 0.5} ` +
+            `L${x + 0.5 + radius} ${y + 1.5} ` +
+            `L${x + 0.5 - radius} ${y + 1.5} Z`
+          );
+        }
+      }
     }
-  }
-
-  // Draw circles for any remaining isolated modules
-  for (const [x, y] of modules) {
-    const key = `${x},${y}`;
-    if (visited.has(key)) continue;
-    visited.add(key);
-
-    const cx = x + 0.5;
-    const cy = y + 0.5;
-    paths.push(
-      `M${cx - radius} ${cy} ` +
-      `a${radius} ${radius} 0 1 0 ${radius * 2} 0 ` +
-      `a${radius} ${radius} 0 1 0 ${-radius * 2} 0`
-    );
   }
 
   return paths.join(" ");
