@@ -1,7 +1,10 @@
 """Base class for QR code shape generators."""
 
 import math
+import random
 from typing import List, Tuple
+
+Point = Tuple[float, float]
 
 
 class BaseShape:
@@ -10,10 +13,7 @@ class BaseShape:
     Subclasses must implement:
     - name: Human-readable name of the shape
     - rotation_presets: List of (label, degrees) rotation presets
-    - point_inside: Check if a point is inside the shape
     - _point_inside_unit: Check if point is inside unit shape (size=1)
-    - _get_edge_point: Get a point on the shape's edge at parameter t (0-1)
-    - _get_num_edge_points: Number of vertices/segments for edge parameterization
     """
 
     @property
@@ -26,36 +26,8 @@ class BaseShape:
         """List of (label, degrees) rotation presets for this shape."""
         raise NotImplementedError
 
-    def point_inside(
-        self,
-        x: float,
-        y: float,
-        cx: float,
-        cy: float,
-        size: float,
-        rotation_deg: float = 0,
-    ) -> bool:
-        """Check if a point (x, y) is inside the shape."""
-        raise NotImplementedError
-
     def _point_inside_unit(self, px: float, py: float, rotation_deg: float) -> bool:
         """Check if point is inside unit shape (size=1) at given rotation."""
-        raise NotImplementedError
-
-    def _get_edge_point(self, t: float, rotation_deg: float) -> Tuple[float, float]:
-        """Get a point on the unit shape's edge at parameter t.
-
-        Args:
-            t: Parameter from 0 to 1 representing position along perimeter
-            rotation_deg: Rotation angle in degrees
-
-        Returns:
-            Tuple of (x, y) coordinates on the edge
-        """
-        raise NotImplementedError
-
-    def _get_num_edge_points(self) -> int:
-        """Get number of vertices for edge parameterization."""
         raise NotImplementedError
 
     def _rotate_point(self, px: float, py: float, rotation_deg: float) -> Tuple[float, float]:
@@ -67,101 +39,75 @@ class BaseShape:
         sin_a = math.sin(angle_rad)
         return px * cos_a - py * sin_a, px * sin_a + py * cos_a
 
-    def _compute_square_quality(
-        self, t0: float, t1: float, t2: float, t3: float, rotation_deg: float
-    ) -> float:
-        """Compute how close 4 edge points are to forming a square.
+    def point_inside(
+        self,
+        x: float,
+        y: float,
+        cx: float,
+        cy: float,
+        size: float,
+        rotation_deg: float = 0,
+    ) -> bool:
+        """Check if a point (x, y) is inside the shape."""
+        # Translate to origin and normalize by size
+        px = (x - cx) / size
+        py = (y - cy) / size
+        return self._point_inside_unit(px, py, rotation_deg)
 
-        Returns:
-            quality_score: 0 = perfect square, higher = worse
-        """
-        # Get the 4 points on the edge
-        p0 = self._get_edge_point(t0, rotation_deg)
-        p1 = self._get_edge_point(t1, rotation_deg)
-        p2 = self._get_edge_point(t2, rotation_deg)
-        p3 = self._get_edge_point(t3, rotation_deg)
-
-        # Calculate side lengths
-        def dist(a: Tuple[float, float], b: Tuple[float, float]) -> float:
-            return math.sqrt((a[0] - b[0]) ** 2 + (a[1] - b[1]) ** 2)
-
-        # Sides: p0->p1, p1->p2, p2->p3, p3->p0
-        s01 = dist(p0, p1)
-        s12 = dist(p1, p2)
-        s23 = dist(p2, p3)
-        s30 = dist(p3, p0)
-
-        sides = [s01, s12, s23, s30]
-        avg_side = sum(sides) / 4
-
-        # Diagonals should be equal and sqrt(2) * side
-        d02 = dist(p0, p2)
-        d13 = dist(p1, p3)
-
-        # Quality metrics:
-        # 1. Side length variance (all sides should be equal)
-        side_variance = sum((s - avg_side) ** 2 for s in sides) / 4
-
-        # 2. Diagonal equality and correct ratio
-        expected_diag = avg_side * math.sqrt(2)
-        diag_error = (d02 - expected_diag) ** 2 + (d13 - expected_diag) ** 2
-        diag_equality_error = (d02 - d13) ** 2
-
-        # 3. Right angles - check dot products of adjacent sides
-        def dot(v1: Tuple[float, float], v2: Tuple[float, float]) -> float:
-            return v1[0] * v2[0] + v1[1] * v2[1]
-
-        v01 = (p1[0] - p0[0], p1[1] - p0[1])
-        v12 = (p2[0] - p1[0], p2[1] - p1[1])
-        v23 = (p3[0] - p2[0], p3[1] - p2[1])
-        v30 = (p0[0] - p3[0], p0[1] - p3[1])
-
-        # For 90° angles, dot product should be 0
-        angle_error = dot(v01, v12) ** 2 + dot(v12, v23) ** 2 + dot(v23, v30) ** 2 + dot(v30, v01) ** 2
-
-        # 4. Axis alignment - sides should be horizontal or vertical
-        # Horizontal sides: v12, v30 should have y ≈ 0
-        # Vertical sides: v01, v23 should have x ≈ 0
-        axis_error = v01[0] ** 2 + v23[0] ** 2 + v12[1] ** 2 + v30[1] ** 2
-
-        # Combined quality score (lower is better)
-        return side_variance + diag_error + diag_equality_error + angle_error * 0.1 + axis_error
-
-    def _compute_square_coords(
-        self, t0: float, t1: float, t2: float, t3: float, rotation_deg: float
-    ) -> Tuple[Tuple[float, float], float]:
-        """Compute the center and side length of a square from 4 edge parameters.
-
+    def _square_fits(self, cx: float, cy: float, half_size: float, rotation_deg: float) -> bool:
+        """Check if an axis-aligned square fits inside the unit shape.
+        
         Args:
-            t0, t1, t2, t3: Edge parameters (0-1)
+            cx, cy: Center of the square in unit coordinates
+            half_size: Half the side length of the square
             rotation_deg: Shape rotation in degrees
-
+        
         Returns:
-            Tuple of (center, side_length) where center is (x, y)
+            True if all 4 corners are inside the shape
         """
-        # Get the 4 points on the edge
-        p0 = self._get_edge_point(t0, rotation_deg)
-        p1 = self._get_edge_point(t1, rotation_deg)
-        p2 = self._get_edge_point(t2, rotation_deg)
-        p3 = self._get_edge_point(t3, rotation_deg)
+        corners = [
+            (cx - half_size, cy - half_size),
+            (cx + half_size, cy - half_size),
+            (cx + half_size, cy + half_size),
+            (cx - half_size, cy + half_size),
+        ]
+        return all(self._point_inside_unit(x, y, rotation_deg) for x, y in corners)
 
-        # Center of the quadrilateral
-        center = (
-            (p0[0] + p1[0] + p2[0] + p3[0]) / 4,
-            (p0[1] + p1[1] + p2[1] + p3[1]) / 4,
-        )
+    def _max_square_at_center(self, cx: float, cy: float, rotation_deg: float) -> float:
+        """Find the maximum half-size of a square centered at (cx, cy).
+        
+        Uses binary search to find the largest square that fits.
+        
+        Args:
+            cx, cy: Center point in unit coordinates
+            rotation_deg: Shape rotation in degrees
+            
+        Returns:
+            Maximum half-size (half of side length) that fits
+        """
+        # First check if center is even inside
+        if not self._point_inside_unit(cx, cy, rotation_deg):
+            return 0.0
+        
+        # Binary search for max size
+        lo, hi = 0.0, 2.0  # Max possible half-size in unit coords
+        
+        for _ in range(40):  # Enough iterations for good precision
+            mid = (lo + hi) / 2
+            if self._square_fits(cx, cy, mid, rotation_deg):
+                lo = mid
+            else:
+                hi = mid
+        
+        return lo
 
-        # Average side length
-        def dist(a: Tuple[float, float], b: Tuple[float, float]) -> float:
-            return math.sqrt((a[0] - b[0]) ** 2 + (a[1] - b[1]) ** 2)
-
-        s01 = dist(p0, p1)
-        s12 = dist(p1, p2)
-        s23 = dist(p2, p3)
-        s30 = dist(p3, p0)
-        side_length = (s01 + s12 + s23 + s30) / 4
-
-        return center, side_length
+    def _compute_loss(self, cx: float, cy: float, rotation_deg: float) -> float:
+        """Compute loss (negative of max square size) for optimization.
+        
+        We want to maximize square size, so we minimize negative size.
+        """
+        max_size = self._max_square_at_center(cx, cy, rotation_deg)
+        return -max_size
 
     def _compute_adaptive_step(
         self,
@@ -174,7 +120,7 @@ class BaseShape:
 
         Args:
             step: Current step size
-            delta: Change in loss (prev_quality - quality), positive = improvement
+            delta: Change in loss (prev_loss - loss), positive = improvement
             min_delta: Minimum delta to consider as progress
             max_step: Maximum allowed step size
 
@@ -192,107 +138,114 @@ class BaseShape:
             # Stalled - reduce step
             return step * 0.8, False
 
-    def _optimize_square_params(
-        self, t0: float, t1: float, t2: float, t3: float, rotation_deg: float, max_iterations: int = 100
-    ) -> Tuple[float, float, float, float]:
-        """Optimize 4 edge parameters to form the best square.
-
-        Uses gradient descent with adaptive step size:
-        - Increases step when making progress
-        - Decreases step when loss increases or stalls
-
-        Args:
-            t0, t1, t2, t3: Initial edge parameters (0-1)
-            rotation_deg: Shape rotation in degrees
-            max_iterations: Maximum iterations before stopping
-
+    def _get_bounding_box(self, rotation_deg: float) -> Tuple[float, float, float, float]:
+        """Get bounding box of unit shape at given rotation.
+        
         Returns:
-            Tuple of (t0, t1, t2, t3, quality)
+            Tuple of (min_x, min_y, max_x, max_y)
         """
-        params = [t0, t1, t2, t3]
-        best_params = params.copy()
-        best_quality = float("inf")
-
-        step = 0.02  # Initial step size
-        min_step = 1e-6
-        max_step = 0.1
-        min_delta = 1e-10
-        stall_count = 0
-        prev_quality = float("inf")
-
-        for iteration in range(max_iterations):
-            quality = self._compute_square_quality(
-                params[0], params[1], params[2], params[3], rotation_deg
-            )
-
-            # Track best result
-            if quality < best_quality:
-                best_quality = quality
-                best_params = params.copy()
-
-            # Adaptive step size
-            delta = prev_quality - quality
-            step, should_revert = self._compute_adaptive_step(
-                step, delta, min_delta, max_step
-            )
-
-            if should_revert:
-                params = best_params.copy()
-                stall_count += 1
-            elif delta <= min_delta:
-                stall_count += 1
-            else:
-                stall_count = 0
-
-            # Early stopping if step too small or stalled too long
-            if step < min_step or stall_count > 10:
-                break
-
-            prev_quality = quality
-
-            # Compute numerical gradient using central difference
-            gradient = [0.0] * 4
-            eps = 0.001
-            for i in range(4):
-                params_plus = params.copy()
-                params_plus[i] = (params_plus[i] + eps) % 1.0
-                q_plus = self._compute_square_quality(
-                    params_plus[0], params_plus[1], params_plus[2], params_plus[3], rotation_deg
-                )
-
-                params_minus = params.copy()
-                params_minus[i] = (params_minus[i] - eps) % 1.0
-                q_minus = self._compute_square_quality(
-                    params_minus[0], params_minus[1], params_minus[2], params_minus[3], rotation_deg
-                )
-
-                gradient[i] = (q_plus - q_minus) / (2 * eps)
-
-            # Update parameters (gradient descent)
-            for i in range(4):
-                params[i] = (params[i] - step * gradient[i]) % 1.0
-
-            # Ensure ordering is maintained (t0 < t1 < t2 < t3)
-            params.sort()
-
-        return (best_params[0], best_params[1], best_params[2], best_params[3])
+        # Sample points around the shape to find bounds
+        # For unit shapes, max extent is typically around 1.0
+        return (-1.0, -1.0, 1.0, 1.0)
 
     def max_inscribed_square(
         self, qr_modules: int, rotation_deg: float = 0
     ) -> Tuple[float, float, float]:
-        """Calculate the maximum axis-aligned inscribed square.
-
+        """Find the maximum inscribed axis-aligned square using gradient descent.
+        
+        Args:
+            qr_modules: Number of QR modules (determines scale)
+            rotation_deg: Shape rotation in degrees
+            
         Returns:
             Tuple of (center_x, center_y, scale_factor)
         """
-        # Initial positions: evenly spaced
-        t0, t1, t2, t3 = 0.0, 0.25, 0.5, 0.75
-
-        t0, t1, t2, t3 = self._optimize_square_params(
-            t0, t1, t2, t3, rotation_deg, max_iterations=100
-        )
-
-        center, unit_side = self._compute_square_coords(t0, t1, t2, t3, rotation_deg)
-
-        # Scale by size
-        return (center[0], center[1], qr_modules / unit_side)
+        # Get bounding box for search bounds
+        min_x, min_y, max_x, max_y = self._get_bounding_box(rotation_deg)
+        
+        best_cx, best_cy = 0.0, 0.0
+        best_size = 0.0
+        best_loss = float("inf")
+        
+        # Try multiple starting points
+        n_starts = 15
+        for i in range(n_starts):
+            if i == 0:
+                # Start at centroid
+                cx = (min_x + max_x) / 2
+                cy = (min_y + max_y) / 2
+            else:
+                # Random point inside bounding box
+                cx = min_x + random.random() * (max_x - min_x)
+                cy = min_y + random.random() * (max_y - min_y)
+                
+                # Skip if outside shape
+                if not self._point_inside_unit(cx, cy, rotation_deg):
+                    continue
+            
+            # Gradient descent
+            step = 0.02
+            min_step = 1e-6
+            max_step = 0.1
+            min_delta = 1e-10
+            prev_loss = float("inf")
+            
+            best_iter_cx, best_iter_cy = cx, cy
+            best_iter_loss = float("inf")
+            
+            for iteration in range(100):
+                loss = self._compute_loss(cx, cy, rotation_deg)
+                
+                # Track best for this starting point
+                if loss < best_iter_loss:
+                    best_iter_loss = loss
+                    best_iter_cx, best_iter_cy = cx, cy
+                
+                # Adaptive step
+                delta = prev_loss - loss
+                step, should_revert = self._compute_adaptive_step(
+                    step, delta, min_delta, max_step
+                )
+                
+                if should_revert:
+                    cx, cy = best_iter_cx, best_iter_cy
+                
+                if step < min_step:
+                    break
+                
+                prev_loss = loss
+                
+                # Numerical gradient
+                eps = 0.001
+                grad_x = (self._compute_loss(cx + eps, cy, rotation_deg) - 
+                          self._compute_loss(cx - eps, cy, rotation_deg)) / (2 * eps)
+                grad_y = (self._compute_loss(cx, cy + eps, rotation_deg) - 
+                          self._compute_loss(cx, cy - eps, rotation_deg)) / (2 * eps)
+                
+                # Update
+                new_cx = cx - step * grad_x
+                new_cy = cy - step * grad_y
+                
+                # Clamp to bounding box
+                new_cx = max(min_x, min(max_x, new_cx))
+                new_cy = max(min_y, min(max_y, new_cy))
+                
+                # Only move if still inside shape
+                if self._point_inside_unit(new_cx, new_cy, rotation_deg):
+                    cx, cy = new_cx, new_cy
+            
+            # Check final result for this starting point
+            final_size = self._max_square_at_center(best_iter_cx, best_iter_cy, rotation_deg)
+            final_loss = -final_size
+            
+            if final_loss < best_loss:
+                best_loss = final_loss
+                best_cx, best_cy = best_iter_cx, best_iter_cy
+                best_size = final_size
+        
+        # best_size is half the side length in unit coordinates
+        # We want scale such that the full side length equals qr_modules
+        side_length = 2 * best_size
+        scale = qr_modules / side_length
+        
+        return (best_cx, best_cy, scale)

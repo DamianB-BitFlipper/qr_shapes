@@ -49,7 +49,7 @@ def _generate_svg_data(
     # The height/width of the QR code grid in modules
     qr_modules = qr.modules_count
 
-    # Get inscribed square info: center position and scale factor
+    # Get inscribed square info: center position (in unit coords) and scale factor
     # The scale factor converts from unit shape to a shape where QR fits exactly
     center_x, center_y, scale = shape.max_inscribed_square(qr_modules, rotation)
 
@@ -64,8 +64,8 @@ def _generate_svg_data(
     cy = canvas_size / 2
 
     # QR position: centered within the inscribed square
-    qr_center_x = cx + center_x
-    qr_center_y = cy + center_y
+    qr_center_x = cx + center_x * scale
+    qr_center_y = cy + center_y * scale
     qr_x = int(round(qr_center_x - qr_modules / 2))
     qr_y = int(round(qr_center_y - qr_modules / 2))
 
