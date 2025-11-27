@@ -54,7 +54,15 @@ const shapeConfigs: Record<Shape, ShapeConfig> = {
 
 const shapeList: Shape[] = ["hexagon", "triangle"];
 
-function ShapePreview({ shape, rotation }: { shape: Shape; rotation: number }) {
+function ShapePreview({
+  shape,
+  rotation,
+  color,
+}: {
+  shape: Shape;
+  rotation: number;
+  color: string;
+}) {
   const size = 20;
   const cx = 20;
   const cy = 20;
@@ -64,7 +72,7 @@ function ShapePreview({ shape, rotation }: { shape: Shape; rotation: number }) {
     <svg width="40" height="40" viewBox="0 0 40 40">
       <polygon
         points={points}
-        fill="#18181b"
+        fill={color}
         transform={`rotate(${rotation}, ${cx}, ${cy})`}
       />
     </svg>
@@ -80,6 +88,7 @@ export default function Home() {
   const [resolution, setResolution] = useState(1000);
   const [rotation, setRotation] = useState(0);
   const [shape, setShape] = useState<Shape>("hexagon");
+  const [color, setColor] = useState("#000000");
 
   const handleGenerate = async () => {
     if (!url.trim()) return;
@@ -88,7 +97,7 @@ export default function Home() {
     setGenError(null);
 
     try {
-      const base64 = await generatePNG(url, shape, resolution, rotation);
+      const base64 = await generatePNG(url, shape, resolution, rotation, color);
       setQrImage(`data:image/png;base64,${base64}`);
     } catch (err) {
       setGenError(err instanceof Error ? err.message : "Failed to generate QR");
@@ -101,7 +110,7 @@ export default function Home() {
     if (!url.trim()) return;
 
     try {
-      const base64 = await generatePNG(url, shape, resolution, rotation);
+      const base64 = await generatePNG(url, shape, resolution, rotation, color);
       const link = document.createElement("a");
       link.href = `data:image/png;base64,${base64}`;
       link.download = `qr-${shape}.png`;
@@ -115,7 +124,7 @@ export default function Home() {
     if (!url.trim()) return;
 
     try {
-      const svg = await generateSVG(url, shape, resolution, rotation);
+      const svg = await generateSVG(url, shape, resolution, rotation, color);
       const blob = new Blob([svg], { type: "image/svg+xml" });
       const link = document.createElement("a");
       link.href = URL.createObjectURL(blob);
@@ -174,9 +183,10 @@ export default function Home() {
                 />
               </div>
 
+              {/* Shape & Color Row */}
               <div className="flex items-center gap-4">
-                {/* Shape Selector */}
-                <div className="flex flex-col gap-2">
+                {/* Shape Selector - compact horizontal grid */}
+                <div className="flex flex-wrap gap-1">
                   {shapeList.map((s) => (
                     <button
                       key={s}
@@ -184,14 +194,14 @@ export default function Home() {
                         setShape(s);
                         setRotation(0);
                       }}
-                      className={`p-2 rounded-lg border-2 transition ${
+                      className={`p-1.5 rounded-md border-2 transition ${
                         shape === s
                           ? "border-zinc-900 bg-zinc-100"
                           : "border-zinc-200 hover:border-zinc-400"
                       }`}
                       title={shapeConfigs[s].label}
                     >
-                      <svg width="32" height="32" viewBox="0 0 40 40">
+                      <svg width="24" height="24" viewBox="0 0 40 40">
                         <polygon
                           points={shapeConfigs[s].getPoints(16, 20, 20)}
                           fill={shape === s ? "#18181b" : "#71717a"}
@@ -201,53 +211,70 @@ export default function Home() {
                   ))}
                 </div>
 
-                {/* Shape Preview */}
-                <ShapePreview shape={shape} rotation={rotation} />
-
-                {/* Rotation Controls */}
-                <div className="flex-1 flex flex-col gap-2">
-                  <div className="flex items-center gap-2">
-                    <label
-                      htmlFor="rotation"
-                      className="text-sm font-medium text-zinc-700"
-                    >
-                      Rotation:
-                    </label>
-                    <input
-                      id="rotation-number"
-                      type="number"
-                      min="0"
-                      max="360"
-                      value={rotation}
-                      onChange={(e) => setRotation(Number(e.target.value) % 360)}
-                      className="w-16 px-2 py-1 rounded border border-zinc-300 text-zinc-900 text-sm"
-                    />
-                    <span className="text-sm text-zinc-500">°</span>
-                  </div>
+                {/* Color Picker */}
+                <div className="flex items-center gap-2">
+                  <label
+                    htmlFor="color"
+                    className="text-sm font-medium text-zinc-700"
+                  >
+                    Color:
+                  </label>
                   <input
-                    id="rotation"
-                    type="range"
+                    id="color"
+                    type="color"
+                    value={color}
+                    onChange={(e) => setColor(e.target.value)}
+                    className="w-8 h-8 rounded cursor-pointer border border-zinc-300"
+                  />
+                </div>
+
+                {/* Shape Preview */}
+                <ShapePreview shape={shape} rotation={rotation} color={color} />
+              </div>
+
+              {/* Rotation Controls */}
+              <div className="flex flex-col gap-2">
+                <div className="flex items-center gap-2">
+                  <label
+                    htmlFor="rotation"
+                    className="text-sm font-medium text-zinc-700"
+                  >
+                    Rotation:
+                  </label>
+                  <input
+                    id="rotation-number"
+                    type="number"
                     min="0"
                     max="360"
                     value={rotation}
-                    onChange={(e) => setRotation(Number(e.target.value))}
-                    className="w-full"
+                    onChange={(e) => setRotation(Number(e.target.value) % 360)}
+                    className="w-16 px-2 py-1 rounded border border-zinc-300 text-zinc-900 text-sm"
                   />
-                  <div className="flex flex-wrap gap-2">
-                    {shapeConfigs[shape].presets.map((preset) => (
-                      <button
-                        key={preset.value}
-                        onClick={() => setRotation(preset.value)}
-                        className={`px-2 py-1 text-xs rounded border transition ${
-                          rotation === preset.value
-                            ? "bg-zinc-900 text-white border-zinc-900"
-                            : "border-zinc-300 text-zinc-600 hover:bg-zinc-100"
-                        }`}
-                      >
-                        {preset.label}
-                      </button>
-                    ))}
-                  </div>
+                  <span className="text-sm text-zinc-500">°</span>
+                </div>
+                <input
+                  id="rotation"
+                  type="range"
+                  min="0"
+                  max="360"
+                  value={rotation}
+                  onChange={(e) => setRotation(Number(e.target.value))}
+                  className="w-full"
+                />
+                <div className="flex flex-wrap gap-2">
+                  {shapeConfigs[shape].presets.map((preset) => (
+                    <button
+                      key={preset.value}
+                      onClick={() => setRotation(preset.value)}
+                      className={`px-2 py-1 text-xs rounded border transition ${
+                        rotation === preset.value
+                          ? "bg-zinc-900 text-white border-zinc-900"
+                          : "border-zinc-300 text-zinc-600 hover:bg-zinc-100"
+                      }`}
+                    >
+                      {preset.label}
+                    </button>
+                  ))}
                 </div>
               </div>
 

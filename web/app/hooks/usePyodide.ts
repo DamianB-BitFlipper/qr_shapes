@@ -109,11 +109,12 @@ export function usePyodide() {
       url: string,
       shape: string,
       resolution: number,
-      rotation: number
+      rotation: number,
+      color: string
     ): Promise<string> => {
       if (!pyodide) throw new Error("Pyodide not loaded");
       const result = await pyodide.runPythonAsync(
-        `generate_qr_svg("${url}", "${shape}", ${resolution}, ${rotation})`
+        `generate_qr_svg("${url}", "${shape}", ${resolution}, ${rotation}, "${color}")`
       );
       return result as string;
     },
@@ -125,10 +126,11 @@ export function usePyodide() {
       url: string,
       shape: string,
       resolution: number,
-      rotation: number
+      rotation: number,
+      color: string
     ): Promise<string> => {
       // Generate SVG first, then convert to PNG using browser canvas
-      const svg = await generateSVG(url, shape, resolution, rotation);
+      const svg = await generateSVG(url, shape, resolution, rotation, color);
       return svgToPngBase64(svg);
     },
     [generateSVG]

@@ -126,7 +126,7 @@ def _generate_svg_data(
     return rects_svg, viewbox
 
 
-def _build_svg(rects_svg: str, viewbox: ViewBox, resolution: int) -> str:
+def _build_svg(rects_svg: str, viewbox: ViewBox, resolution: int, color: str = "#000000") -> str:
     """Build complete SVG string from parts."""
     svg_width = resolution
     svg_height = int(resolution * viewbox["height"] / viewbox["width"])
@@ -140,7 +140,7 @@ def _build_svg(rects_svg: str, viewbox: ViewBox, resolution: int) -> str:
     return f"""<?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" width="{svg_width}" height="{svg_height}" viewBox="{vb}">
   <rect x="{vb_min_x}" y="{vb_min_y}" width="{vb_w}" height="{vb_h}" fill="white"/>
-  <g fill="black">
+  <g fill="{color}">
     {rects_svg}
   </g>
 </svg>"""
@@ -150,9 +150,13 @@ def _build_svg(rects_svg: str, viewbox: ViewBox, resolution: int) -> str:
 
 
 def generate_qr_svg(
-    url: str, shape_name: str = "hexagon", resolution: int = 1000, rotation: int = 0
+    url: str,
+    shape_name: str = "hexagon",
+    resolution: int = 1000,
+    rotation: int = 0,
+    color: str = "#000000",
 ) -> str:
     """Generate shaped QR as SVG, returns SVG string."""
     shape = SHAPES.get(shape_name, SHAPES["hexagon"])
     rects_svg, viewbox = _generate_svg_data(url, shape, rotation)
-    return _build_svg(rects_svg, viewbox, resolution)
+    return _build_svg(rects_svg, viewbox, resolution, color)
