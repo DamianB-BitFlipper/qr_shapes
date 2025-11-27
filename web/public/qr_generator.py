@@ -1,8 +1,9 @@
 """QR code generator with pluggable shape support."""
 
+import json
 import math
 import random
-from typing import Dict, Tuple
+from typing import Dict, List
 
 import qrcode
 from qrcode.constants import ERROR_CORRECT_H
@@ -11,9 +12,6 @@ from qrcode.constants import ERROR_CORRECT_H
 # BaseShape, Square, Circle, Diamond, Hexagon, Triangle, and Heart are available
 # from previously loaded files.
 
-
-# Type alias for viewbox dictionary
-ViewBox = Dict[str, float]
 
 # Available shapes
 SHAPES: Dict[str, "BaseShape"] = {  # type: ignore[name-defined]
@@ -26,24 +24,33 @@ SHAPES: Dict[str, "BaseShape"] = {  # type: ignore[name-defined]
 }
 
 
-def _generate_svg_data(
+def generate_qr_data(
     url: str,
-    shape: "BaseShape",
-    rotation: int = 0,  # type: ignore[name-defined]
-) -> Tuple[str, ViewBox]:
-    """Generate QR code SVG data inside a shape.
+    shape_name: str = "hexagon",
+    rotation: int = 0,
+) -> str:
+    """Generate QR code data as JSON with module coordinates.
 
-    The QR code is maximally sized to fit within the shape boundary,
-    positioned according to the shape's max_inscribed_square method.
+    Returns JSON with module positions and viewbox info for frontend
+    SVG/canvas-based rendering.
 
     Args:
         url: URL to encode in the QR code
-        shape: Shape implementing BaseShape
+        shape_name: Name of the shape to use
         rotation: Rotation angle in degrees
 
     Returns:
-        Tuple of (rects_svg, viewbox_dict)
+        JSON string with structure:
+        {
+            "qrModules": [[x, y], ...],  // Black QR module positions
+            "noiseModules": [[x, y], ...],  // Random noise module positions
+            "viewbox": {"min_x", "min_y", "width", "height"},
+            "shapeSize": float,
+            "center": [cx, cy]
+        }
     """
+    shape = SHAPES.get(shape_name, SHAPES["hexagon"])
+
     qr = qrcode.QRCode(
         version=None,
         error_correction=ERROR_CORRECT_H,
@@ -53,41 +60,27 @@ def _generate_svg_data(
     qr.add_data(url)
     qr.make(fit=True)
 
-    # The height/width of the QR code grid in modules
-    qr_modules = qr.modules_count
-
-    # Get inscribed square info: center position (in unit coords) and scale factor
-    # The scale factor converts from unit shape to a shape where QR fits exactly
-    center_x, center_y, scale = shape.max_inscribed_square(qr_modules, rotation)
-
-    # Shape size is the scale factor (distance from center to vertex)
+    qr_modules_count = qr.modules_count
+    center_x, center_y, scale = shape.max_inscribed_square(qr_modules_count, rotation)
     shape_size = scale
-
-    # Account for bounding box expansion due to rotation
     bbox_factor = shape.bounding_box_factor(rotation)
-
-    # Canvas size to fit the shape with margin
     canvas_size = int(math.ceil(shape_size * 2 * bbox_factor)) + 4
 
-    # Shape center
     cx = canvas_size / 2
     cy = canvas_size / 2
 
-    # QR position: centered within the inscribed square
     qr_center_x = cx + center_x * scale
     qr_center_y = cy + center_y * scale
-    qr_x = int(round(qr_center_x - qr_modules / 2))
-    qr_y = int(round(qr_center_y - qr_modules / 2))
+    qr_x = int(round(qr_center_x - qr_modules_count / 2))
+    qr_y = int(round(qr_center_y - qr_modules_count / 2))
 
-    qr_start_module_x = qr_x
-    qr_start_module_y = qr_y
-    qr_end_module_x = qr_start_module_x + qr_modules
-    qr_end_module_y = qr_start_module_y + qr_modules
+    qr_start_x = qr_x
+    qr_start_y = qr_y
+    qr_end_x = qr_start_x + qr_modules_count
+    qr_end_y = qr_start_y + qr_modules_count
 
-    # Build SVG rectangles
-    rects = []
-
-    # Add random noise outside QR area but inside shape
+    # Collect noise module positions
+    noise_modules: List[List[float]] = []
     for module_y in range(canvas_size):
         for module_x in range(canvas_size):
             module_cx = module_x + 0.5
@@ -96,26 +89,22 @@ def _generate_svg_data(
             if not shape.point_inside(module_cx, module_cy, cx, cy, shape_size, rotation):
                 continue
 
-            if (
-                qr_start_module_x <= module_x < qr_end_module_x
-                and qr_start_module_y <= module_y < qr_end_module_y
-            ):
+            if qr_start_x <= module_x < qr_end_x and qr_start_y <= module_y < qr_end_y:
                 continue
 
             random.seed(module_x * 10000 + module_y)
             if random.random() > 0.5:
-                rects.append(f'<rect x="{module_x}" y="{module_y}" width="1" height="1"/>')
+                noise_modules.append([module_x, module_y])
 
-    # Add QR code modules
+    # Collect QR module positions (black modules only)
+    qr_module_positions: List[List[float]] = []
     matrix = qr.modules
     for row_idx, row in enumerate(matrix):
         for col_idx, is_black in enumerate(row):
             if is_black:
-                x = qr_x + col_idx
-                y = qr_y + row_idx
-                rects.append(f'<rect x="{x}" y="{y}" width="1" height="1"/>')
+                qr_module_positions.append([qr_x + col_idx, qr_y + row_idx])
 
-    # Calculate viewBox - account for rotation expanding the bounding box
+    # Calculate viewBox
     margin = 2
     effective_size = shape_size * bbox_factor
     min_x = cx - effective_size - margin
@@ -123,84 +112,17 @@ def _generate_svg_data(
     vb_width = (effective_size + margin) * 2
     vb_height = vb_width
 
-    viewbox = {
-        "min_x": min_x,
-        "min_y": min_y,
-        "width": vb_width,
-        "height": vb_height,
+    result = {
+        "qrModules": qr_module_positions,
+        "noiseModules": noise_modules,
+        "viewbox": {
+            "min_x": min_x,
+            "min_y": min_y,
+            "width": vb_width,
+            "height": vb_height,
+        },
+        "shapeSize": shape_size,
+        "center": [cx, cy],
     }
 
-    rects_svg = "".join(rects)
-
-    return rects_svg, viewbox
-
-
-def _build_svg(rects_svg: str, viewbox: ViewBox, resolution: int, fill: str = "#000000") -> str:
-    """Build complete SVG string from parts.
-
-    Args:
-        rects_svg: SVG rectangle elements as a string
-        viewbox: ViewBox dictionary with min_x, min_y, width, height
-        resolution: Output resolution in pixels
-        fill: Either a color (e.g. "#000000") or a data URL for an image
-    """
-    svg_width = resolution
-    svg_height = int(resolution * viewbox["height"] / viewbox["width"])
-
-    vb_min_x = viewbox["min_x"]
-    vb_min_y = viewbox["min_y"]
-    vb_w = viewbox["width"]
-    vb_h = viewbox["height"]
-    vb = f"{vb_min_x} {vb_min_y} {vb_w} {vb_h}"
-
-    # Check if fill is an image data URL
-    is_image = fill.startswith("data:image")
-
-    if is_image:
-        # Use image as pattern fill
-        # The pattern covers the entire viewBox and the image is stretched to fit
-        pattern_def = f"""<defs>
-    <pattern id="imgPattern" patternUnits="userSpaceOnUse"
-             x="{vb_min_x}" y="{vb_min_y}" width="{vb_w}" height="{vb_h}">
-      <image href="{fill}" x="0" y="0" width="{vb_w}" height="{vb_h}"
-             preserveAspectRatio="xMidYMid slice"/>
-    </pattern>
-  </defs>"""
-        fill_attr = "url(#imgPattern)"
-    else:
-        pattern_def = ""
-        fill_attr = fill
-
-    return f"""<?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"
-     width="{svg_width}" height="{svg_height}" viewBox="{vb}">
-  {pattern_def}
-  <rect x="{vb_min_x}" y="{vb_min_y}" width="{vb_w}" height="{vb_h}" fill="white"/>
-  <g fill="{fill_attr}">
-    {rects_svg}
-  </g>
-</svg>"""
-
-
-# Public API functions (called from frontend)
-
-
-def generate_qr_svg(
-    url: str,
-    shape_name: str = "hexagon",
-    resolution: int = 1000,
-    rotation: int = 0,
-    fill: str = "#000000",
-) -> str:
-    """Generate shaped QR as SVG, returns SVG string.
-
-    Args:
-        url: URL to encode in the QR code
-        shape_name: Name of the shape to use
-        resolution: Output resolution in pixels
-        rotation: Rotation angle in degrees
-        fill: Either a color (e.g. "#000000") or a data URL for an image
-    """
-    shape = SHAPES.get(shape_name, SHAPES["hexagon"])
-    rects_svg, viewbox = _generate_svg_data(url, shape, rotation)
-    return _build_svg(rects_svg, viewbox, resolution, fill)
+    return json.dumps(result)
