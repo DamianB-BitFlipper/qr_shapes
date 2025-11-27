@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { usePyodide } from "./hooks/usePyodide";
 
-type Shape = "circle" | "hexagon" | "triangle" | "heart";
+type Shape = "circle" | "diamond" | "hexagon" | "triangle" | "heart";
 
 interface ShapeConfig {
   label: string;
@@ -25,6 +25,32 @@ const shapeConfigs: Record<Shape, ShapeConfig> = {
       return `M ${cx - size} ${cy} A ${size} ${size} 0 1 1 ${cx + size} ${cy} A ${size} ${size} 0 1 1 ${cx - size} ${cy} Z`;
     },
     presets: [], // No rotation presets for circle
+  },
+  diamond: {
+    label: "Diamond",
+    getPoints: (size, cx, cy) => {
+      // Gem diamond shape: flat top, angled corners, point at bottom
+      // Proportions matching the Python implementation
+      const topHalfWidth = 0.5;
+      const fullHalfWidth = 0.95;
+      const topY = -0.65;
+      const cornerY = -0.35;
+      const bottomY = 0.75;
+      
+      return [
+        `${cx - topHalfWidth * size},${cy + topY * size}`,     // Top left
+        `${cx + topHalfWidth * size},${cy + topY * size}`,     // Top right
+        `${cx + fullHalfWidth * size},${cy + cornerY * size}`, // Right corner
+        `${cx},${cy + bottomY * size}`,                         // Bottom point
+        `${cx - fullHalfWidth * size},${cy + cornerY * size}`, // Left corner
+      ].join(" ");
+    },
+    presets: [
+      { label: "Point Down", value: 0 },
+      { label: "Point Up", value: 180 },
+      { label: "Point Right", value: 270 },
+      { label: "Point Left", value: 90 },
+    ],
   },
   hexagon: {
     label: "Hexagon",
@@ -95,7 +121,7 @@ const shapeConfigs: Record<Shape, ShapeConfig> = {
   },
 };
 
-const shapeList: Shape[] = ["circle", "hexagon", "triangle", "heart"];
+const shapeList: Shape[] = ["circle", "diamond", "hexagon", "triangle", "heart"];
 
 function ShapePreview({
   shape,
