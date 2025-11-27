@@ -1,7 +1,6 @@
 """Heart shape implementation for QR codes."""
 
-import math
-from typing import List, Tuple
+import numpy as np
 
 # At runtime in Pyodide, BaseShape is loaded first into global namespace
 # See: web/app/hooks/usePyodide.ts for load order
@@ -24,12 +23,15 @@ class Heart(BaseShape):  # type: ignore[name-defined]
     # The raw heart curve has max radius ~17, we scale to 1
     _SCALE = 1 / 17.0
 
+    # Cache for precomputed edge arrays
+    _HEART_CACHE: dict = {}
+
     @property
     def name(self) -> str:
         return "Heart"
 
     @property
-    def rotation_presets(self) -> List[Tuple[str, int]]:
+    def rotation_presets(self) -> list[tuple[str, int]]:
         return [
             ("Point Up", 0),
             ("Point Right", 90),
@@ -37,54 +39,75 @@ class Heart(BaseShape):  # type: ignore[name-defined]
             ("Point Left", 270),
         ]
 
-    def _heart_curve(self, t: float) -> Tuple[float, float]:
-        """Compute point on heart curve for parameter t (0 to 2*pi)."""
-        sin_t = math.sin(t)
-        cos_t = math.cos(t)
+    def _get_heart_edges(
+        self, num_samples: int = 1024
+    ) -> tuple[
+        np.ndarray,
+        np.ndarray,
+        np.ndarray,
+        np.ndarray,
+        np.ndarray,
+        float,
+        float,
+        float,
+        float,
+    ]:
+        """Get precomputed heart edge data for ray casting.
 
-        x = 16 * (sin_t**3)
+        Returns cached edge arrays and bounding box for efficient point-in-polygon tests.
+        """
+        key = (num_samples, float(self._SCALE))
+        cached = self._HEART_CACHE.get(key)
+        if cached is not None:
+            return cached
+
+        # Sample closed polygon once
+        t = np.linspace(0.0, 2.0 * np.pi, num_samples + 1, dtype=np.float64)
+        sin_t = np.sin(t)
+        cos_t = np.cos(t)
+
+        x = 16.0 * (sin_t**3)
         # Negative y to flip the heart so it points up by default
-        y = -(13 * cos_t - 5 * math.cos(2 * t) - 2 * math.cos(3 * t) - math.cos(4 * t))
+        y = -(13.0 * cos_t - 5.0 * np.cos(2.0 * t) - 2.0 * np.cos(3.0 * t) - np.cos(4.0 * t))
 
-        return x * self._SCALE, y * self._SCALE
+        x *= self._SCALE
+        y *= self._SCALE
+
+        x0, y0 = x[:-1], y[:-1]
+        x1, y1 = x[1:], y[1:]
+        dx = x1 - x0
+        dy = y1 - y0
+
+        xmin, xmax = float(x.min()), float(x.max())
+        ymin, ymax = float(y.min()), float(y.max())
+
+        cached = (x0, y0, dx, dy, y1, xmin, xmax, ymin, ymax)
+        self._HEART_CACHE[key] = cached
+        return cached
 
     def _point_inside_unit(self, px: float, py: float, rotation_deg: float) -> bool:
         """Check if point is inside unit heart (size=1) at given rotation.
 
-        Uses the implicit form of the heart curve:
-            (x² + y² - 1)³ - x²y³ < 0
-
-        But we use a modified version that matches our parametric heart better.
-        We use ray casting for accurate inside detection.
+        Uses vectorized ray casting algorithm with precomputed curve points.
         """
         # Rotate point in opposite direction
         px, py = self._rotate_point(px, py, rotation_deg)
 
-        # Quick bounding box check
-        if abs(px) > 1.0 or abs(py) > 1.0:
+        x0, y0, dx, dy, y1, xmin, xmax, ymin, ymax = self._get_heart_edges(num_samples=1024)
+
+        # Fast bounding box rejection
+        if px < xmin or px > xmax or py < ymin or py > ymax:
             return False
 
-        # Ray casting algorithm: count intersections with heart boundary
-        # Cast a ray from (px, py) to the right (+x direction)
-        intersections = 0
-        num_samples = 360
-        prev_x, prev_y = self._heart_curve(0)
+        # Vectorized ray casting to +x direction
+        # Segment crosses horizontal ray if py is in [min(y0,y1), max(y0,y1))
+        # with half-open rule to avoid double counts
+        dy_nonzero = dy != 0.0
+        cond = dy_nonzero & (((y0 <= py) & (py < y1)) | ((y1 <= py) & (py < y0)))
 
-        for i in range(1, num_samples + 1):
-            t = 2 * math.pi * i / num_samples
-            curr_x, curr_y = self._heart_curve(t)
+        # x intersection at y=py
+        t = (py - y0) / dy
+        x_int = x0 + t * dx
 
-            # Check if ray intersects this segment
-            # Ray goes from (px, py) to (+infinity, py)
-            if (prev_y <= py < curr_y) or (curr_y <= py < prev_y):
-                # Compute x-coordinate of intersection
-                if abs(curr_y - prev_y) > 1e-10:
-                    t_intersect = (py - prev_y) / (curr_y - prev_y)
-                    x_intersect = prev_x + t_intersect * (curr_x - prev_x)
-                    if x_intersect > px:
-                        intersections += 1
-
-            prev_x, prev_y = curr_x, curr_y
-
-        # Odd number of intersections means inside
-        return intersections % 2 == 1
+        hits = cond & (x_int > px)
+        return (int(hits.sum()) & 1) == 1

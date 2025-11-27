@@ -1,7 +1,7 @@
 """Base class for QR code shape generators."""
 
-import math
-from typing import List, Tuple
+import numpy as np
+from numpy.typing import NDArray
 
 
 class BaseShape:
@@ -19,7 +19,7 @@ class BaseShape:
         raise NotImplementedError
 
     @property
-    def rotation_presets(self) -> List[Tuple[str, int]]:
+    def rotation_presets(self) -> list[tuple[str, int]]:
         """List of (label, degrees) rotation presets for this shape."""
         raise NotImplementedError
 
@@ -27,14 +27,34 @@ class BaseShape:
         """Check if point is inside unit shape (size=1) at given rotation."""
         raise NotImplementedError
 
-    def _rotate_point(self, px: float, py: float, rotation_deg: float) -> Tuple[float, float]:
+    def _rotate_point(self, px: float, py: float, rotation_deg: float) -> tuple[float, float]:
         """Rotate a point by the given angle (inverse rotation for shape simulation)."""
         if rotation_deg == 0:
             return px, py
-        angle_rad = -math.radians(rotation_deg)
-        cos_a = math.cos(angle_rad)
-        sin_a = math.sin(angle_rad)
-        return px * cos_a - py * sin_a, px * sin_a + py * cos_a
+        angle_rad = np.radians(-rotation_deg)
+        cos_a = np.cos(angle_rad)
+        sin_a = np.sin(angle_rad)
+        return float(px * cos_a - py * sin_a), float(px * sin_a + py * cos_a)
+
+    def _rotate_points(
+        self, points: NDArray[np.floating], rotation_deg: float
+    ) -> NDArray[np.floating]:
+        """Rotate multiple points by the given angle.
+
+        Args:
+            points: Array of shape (N, 2) with x, y coordinates
+            rotation_deg: Rotation angle in degrees (inverse rotation applied)
+
+        Returns:
+            Rotated points array of shape (N, 2)
+        """
+        if rotation_deg == 0:
+            return points
+        angle_rad = np.radians(-rotation_deg)
+        cos_a = np.cos(angle_rad)
+        sin_a = np.sin(angle_rad)
+        rotation_matrix = np.array([[cos_a, -sin_a], [sin_a, cos_a]])
+        return points @ rotation_matrix.T
 
     def point_inside(
         self,
@@ -105,38 +125,33 @@ class BaseShape:
         max_size = self._max_square_at_center(cx, cy, rotation_deg)
         return -max_size
 
-    def _compute_adaptive_step(
-        self,
-        step: float,
-        delta: float,
-        min_delta: float,
-        max_step: float,
-    ) -> Tuple[float, bool]:
-        """Compute adaptive step size based on loss improvement.
+    def _compute_gradient(
+        self, cx: float, cy: float, rotation_deg: float, eps: float = 0.001
+    ) -> tuple[float, float]:
+        """Compute numerical gradient of loss function.
 
         Args:
-            step: Current step size
-            delta: Change in loss (prev_loss - loss), positive = improvement
-            min_delta: Minimum delta to consider as progress
-            max_step: Maximum allowed step size
+            cx, cy: Current center position
+            rotation_deg: Shape rotation in degrees
+            eps: Epsilon for finite difference
 
         Returns:
-            Tuple of (new_step, should_revert) where should_revert indicates
-            whether to revert to best known params
+            Tuple of (grad_x, grad_y)
         """
-        if delta > min_delta:
-            # Making progress - slightly increase step
-            return min(step * 1.1, max_step), False
-        elif delta < 0:
-            # Got worse - reduce step and signal to revert
-            return step * 0.5, True
-        else:
-            # Stalled - reduce step
-            return step * 0.8, False
+        # Compute all 4 loss values needed for gradient
+        loss_xp = self._compute_loss(cx + eps, cy, rotation_deg)
+        loss_xn = self._compute_loss(cx - eps, cy, rotation_deg)
+        loss_yp = self._compute_loss(cx, cy + eps, rotation_deg)
+        loss_yn = self._compute_loss(cx, cy - eps, rotation_deg)
+
+        grad_x = (loss_xp - loss_xn) / (2 * eps)
+        grad_y = (loss_yp - loss_yn) / (2 * eps)
+
+        return grad_x, grad_y
 
     def max_inscribed_square(
         self, qr_modules: int, rotation_deg: float = 0
-    ) -> Tuple[float, float, float]:
+    ) -> tuple[float, float, float]:
         """Find the maximum inscribed axis-aligned square using gradient descent.
 
         Args:
@@ -147,29 +162,34 @@ class BaseShape:
             Tuple of (center_x, center_y, scale_factor)
         """
         # Start at centroid (0, 0 for unit shape)
-        cx, cy = 0.0, 0.0
+        pos = np.array([0.0, 0.0])
 
-        # Gradient descent
+        # Gradient descent parameters
         step = 0.02
         min_step = 1e-6
         max_step = 0.1
         min_delta = 1e-10
-        prev_loss = float("inf")
+        prev_loss = np.inf
 
-        best_cx, best_cy = cx, cy
+        best_pos = pos.copy()
 
         for _ in range(100):
+            cx, cy = pos
             loss = self._compute_loss(cx, cy, rotation_deg)
 
             # Adaptive step
             delta = prev_loss - loss
-            step, should_revert = self._compute_adaptive_step(step, delta, min_delta, max_step)
-
-            if should_revert:
-                cx, cy = best_cx, best_cy
-            elif delta > min_delta:
-                # Made progress, update best
-                best_cx, best_cy = cx, cy
+            if delta > min_delta:
+                # Making progress - slightly increase step
+                step = min(step * 1.1, max_step)
+                best_pos = pos.copy()
+            elif delta < 0:
+                # Got worse - reduce step and revert
+                step *= 0.5
+                pos = best_pos.copy()
+            else:
+                # Stalled - reduce step
+                step *= 0.8
 
             if step < min_step:
                 break
@@ -177,26 +197,17 @@ class BaseShape:
             prev_loss = loss
 
             # Numerical gradient
-            eps = 0.001
-            grad_x = (
-                self._compute_loss(cx + eps, cy, rotation_deg)
-                - self._compute_loss(cx - eps, cy, rotation_deg)
-            ) / (2 * eps)
-            grad_y = (
-                self._compute_loss(cx, cy + eps, rotation_deg)
-                - self._compute_loss(cx, cy - eps, rotation_deg)
-            ) / (2 * eps)
+            grad = np.array(self._compute_gradient(cx, cy, rotation_deg))
 
-            # Update
-            new_cx = cx - step * grad_x
-            new_cy = cy - step * grad_y
+            # Update position
+            new_pos = pos - step * grad
 
             # Only move if still inside shape
-            if self._point_inside_unit(new_cx, new_cy, rotation_deg):
-                cx, cy = new_cx, new_cy
+            if self._point_inside_unit(new_pos[0], new_pos[1], rotation_deg):
+                pos = new_pos
 
         # best_size is half the side length in unit coordinates
-        best_size = self._max_square_at_center(best_cx, best_cy, rotation_deg)
+        best_size = self._max_square_at_center(best_pos[0], best_pos[1], rotation_deg)
         scale = qr_modules / (2 * best_size)
 
-        return (best_cx, best_cy, scale)
+        return (float(best_pos[0]), float(best_pos[1]), float(scale))

@@ -73,7 +73,7 @@ export function usePyodide() {
         });
 
         // Install dependencies
-        await py.loadPackage("micropip");
+        await py.loadPackage(["micropip", "numpy"]);
         const micropip = py.pyimport("micropip");
         await micropip.install(["qrcode"]);
 

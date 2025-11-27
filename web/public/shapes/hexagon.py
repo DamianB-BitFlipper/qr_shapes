@@ -1,7 +1,6 @@
 """Hexagon shape implementation for QR codes."""
 
-import math
-from typing import List, Tuple
+import numpy as np
 
 # At runtime in Pyodide, BaseShape is loaded first into global namespace
 # See: web/app/hooks/usePyodide.ts for load order
@@ -19,12 +18,14 @@ class Hexagon(BaseShape):  # type: ignore[name-defined]
     - Flat edges at top and bottom
     """
 
+    _H = np.sqrt(3) / 2  # Half-height of unit hexagon
+
     @property
     def name(self) -> str:
         return "Hexagon"
 
     @property
-    def rotation_presets(self) -> List[Tuple[str, int]]:
+    def rotation_presets(self) -> list[tuple[str, int]]:
         return [
             ("Flat Bottom", 0),
             ("Pointed Top", 30),
@@ -40,10 +41,9 @@ class Hexagon(BaseShape):  # type: ignore[name-defined]
 
         dx = abs(px)
         dy = abs(py)
-        h = math.sqrt(3) / 2
 
-        if dx > 1 or dy > h:
+        if dx > 1 or dy > self._H:
             return False
         if dx <= 0.5:
             return True
-        return dy <= h * 2 * (1 - dx)
+        return dy <= self._H * 2 * (1 - dx)
