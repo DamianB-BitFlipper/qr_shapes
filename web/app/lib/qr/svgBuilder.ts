@@ -46,7 +46,7 @@ export function buildSVG(
     case "circles":
       mergedPath = buildCirclesPath(allModules);
       break;
-    case "lines":
+    case "squiggles":
       mergedPath = buildLinesPath(allModules);
       break;
     default:
@@ -59,7 +59,7 @@ export function buildSVG(
     case "circles":
       patternPath = buildCirclesPatternPaths(qrData);
       break;
-    case "lines":
+    case "squiggles":
       patternPath = buildLinesPatternPaths(qrData);
       break;
     default:

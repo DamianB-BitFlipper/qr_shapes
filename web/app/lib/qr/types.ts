@@ -2,7 +2,7 @@
  * Shared type definitions for QR code generation.
  */
 
-export type ModuleStyle = "blocks" | "circles" | "lines";
+export type ModuleStyle = "blocks" | "circles" | "squiggles";
 
 export interface QRData {
   qrModules: [number, number][];

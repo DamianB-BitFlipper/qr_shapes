@@ -149,7 +149,9 @@ function ShapePreview({
   rotation: number;
   color: string;
 }) {
-  const size = 20;
+  // Use smaller size (14) so rotated shapes fit within the viewBox
+  // A square rotated 45° expands by sqrt(2), so 14 * 1.414 ≈ 20 fits in 40x40
+  const size = 14;
   const cx = 20;
   const cy = 20;
   const config = shapeConfigs[shape];
@@ -400,19 +402,19 @@ export default function Home() {
                     <span className="text-sm text-zinc-700">Dots</span>
                   </button>
                   <button
-                    onClick={() => setModuleStyle("lines")}
+                    onClick={() => setModuleStyle("squiggles")}
                     className={`flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-lg border-2 transition ${
-                      moduleStyle === "lines"
+                      moduleStyle === "squiggles"
                         ? "border-zinc-900 bg-zinc-50"
                         : "border-zinc-200 hover:border-zinc-400"
                     }`}
                   >
                     <svg viewBox="0 0 24 24" className="w-5 h-5">
-                      <rect x="2" y="2" width="20" height="8" rx="4" fill={moduleStyle === "lines" ? color : "#a1a1aa"} />
-                      <rect x="2" y="14" width="8" height="8" rx="4" fill={moduleStyle === "lines" ? color : "#a1a1aa"} />
-                      <rect x="14" y="14" width="8" height="8" rx="4" fill={moduleStyle === "lines" ? color : "#a1a1aa"} />
+                      <rect x="2" y="2" width="20" height="8" rx="4" fill={moduleStyle === "squiggles" ? color : "#a1a1aa"} />
+                      <rect x="2" y="14" width="8" height="8" rx="4" fill={moduleStyle === "squiggles" ? color : "#a1a1aa"} />
+                      <rect x="14" y="14" width="8" height="8" rx="4" fill={moduleStyle === "squiggles" ? color : "#a1a1aa"} />
                     </svg>
-                    <span className="text-sm text-zinc-700">Lines</span>
+                    <span className="text-sm text-zinc-700">Squiggles</span>
                   </button>
                 </div>
               </div>

@@ -413,7 +413,7 @@ export function drawPatterns(
     case "circles":
       drawCirclesPatterns(ctx, qrData, scale, offsetX, offsetY);
       break;
-    case "lines":
+    case "squiggles":
       drawLinesPatterns(ctx, qrData, scale, offsetX, offsetY);
       break;
     default:
@@ -480,7 +480,7 @@ export function renderQRWithImage(
         case "circles":
           mergedPathData = buildCirclesPath(allModules);
           break;
-        case "lines":
+        case "squiggles":
           mergedPathData = buildLinesPath(allModules);
           break;
         default:
